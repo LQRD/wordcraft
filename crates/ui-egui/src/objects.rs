@@ -375,7 +375,7 @@ fn link_click(app: &mut WordApp, layout: &DocLayout, pages: &[Rect], scale: f32,
         return;
     }
     let target = crate::canvas::page_at(pages, layout, scale, at).and_then(|(page, x, y)| {
-        layout.find_object(page, |o| o.page == page && o.text_box.is_some() && o.rect.contains(wordcraft_geom::Point::new(x, y)))
+        layout.find_object(page, |o| o.page == page && !o.group_text_box && o.text_box.is_some() && o.rect.contains(wordcraft_geom::Point::new(x, y)))
     });
     let Some(target) = target else {
         app.status(tl!("Not linked: click a text box"));
@@ -781,6 +781,26 @@ mod tests {
             h.run_steps(2);
             assert_eq!(h.state().session.doc, before, "Undo restores the text without changing the group");
         }
+
+        // Create Link must not offer a group member as a standalone target.
+        let end = h.state().session.doc.end_of(StoryRef::Body);
+        h.state_mut().run("select.range", json!({"anchor": end, "focus": end})).unwrap();
+        let source = h.state_mut().run("insert.textBox", json!({"text": "Source"})).unwrap()["story"].as_u64().unwrap() as u32;
+        h.run_steps(3);
+        let layout = h.state_mut().session.layout();
+        let from = layout.text_box(source, 0).unwrap().pos();
+        let member = layout.text_box(ids[0], 0).unwrap();
+        let at = crate::canvas::page_to_screen(h.state_mut(), 0, member.rect.x + 30.0, member.rect.bottom() - 15.0).unwrap();
+        let pages = h.state().canvas.page_rects.clone();
+        let scale = h.state().canvas.scale;
+        let doc = h.state().session.doc.clone();
+        let selection = h.state().session.sel.clone();
+        h.state_mut().canvas.link_from = Some(from);
+        link_click(h.state_mut(), &layout, &pages, scale, at, true);
+        assert!(h.state().status_msg.as_ref().unwrap().0.contains("Not linked: click a text box"));
+        assert_eq!(h.state().session.doc, doc);
+        assert_eq!(h.state().session.sel, selection);
+        assert!(h.state().canvas.link_from.is_none());
     }
 
     #[test]
