@@ -354,6 +354,7 @@ fn new_page(app: &mut WordApp, ui: &mut Ui) {
     });
 }
 
+/// Show clickable recent documents using cached availability, without filesystem work while painting.
 fn open_list(app: &mut WordApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(tl!("Recent")).font(semibold(16.0)));

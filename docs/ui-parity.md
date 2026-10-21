@@ -70,13 +70,13 @@ Find selects the Results tab, including when it prefills selected text. Editing 
 
 Footnote and endnote editing keeps body and note text at normal opacity, on light and dark pages. Headers and footers still dim outside their editing context (#2545).
 
-Desktop Home/Open Recent entries show a localized File not found label and dimmed text/icons only after the OS reports NotFound (#3314). Checks run on one background worker, refresh every two seconds while the list is visible, and clear the marker when the file returns. Other I/O errors and browser filenames are not classified as missing. Entries stay clickable and retain the existing open-error feedback; this does not locate moved files or remove history.
+Desktop Home/Open Recent entries show a localized File not found label and dimmed text/icons only after the OS reports NotFound (#3314). Checks run on one background worker, refresh every two seconds while the list is visible, and clear the marker when the file returns. Completed path checks update immediately, even while a later path is slow; the UI drains queued results without waiting for the worker to finish. Other I/O errors and browser filenames are not classified as missing. Entries stay clickable and retain the existing open-error feedback; this does not locate moved files or remove history.
 
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-21 | trivial | Recent files: missing paths are dimmed and labelled, checked on a background worker and refreshed while Home/Open is visible (#3314); estimates unchanged |
+| 2026-10-21 | trivial | Recent files: missing paths are dimmed and labelled, checked on a background worker with incremental results and refreshed while Home/Open is visible (#3314); estimates unchanged |
 | 2026-10-18 | trivial | Long navigation headings wrap onto further lines inside the pane instead of ending in an ellipsis; the row grows with the text and the pane still resizes (#759, #3015) |
 | 2026-10-18 | trivial | Font list starts at its first row after clearing a no-match query; recent heading remains visible (#2068) |
 | 2026-10-16 | trivial | Dragging the vertical scrollbar shows a tip beside the pointer with the page at the top of the window ("Page 7 of 10"); nothing said where the drag would land (#2551) |

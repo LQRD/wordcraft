@@ -102,13 +102,13 @@ The Language dialog reads effective character formatting, including document def
 
 Footer page-table height and body wrapping are corrected. Other pagination gaps remain open.
 
-Desktop Home/Open Recent entries show a localized File not found label and dimmed text/icons only after the OS reports NotFound (#3314). Checks run on one background worker, refresh every two seconds while the list is visible, and clear the marker when the file returns. Other I/O errors and browser filenames are not classified as missing. Entries stay clickable and retain the existing open-error feedback; this does not locate moved files or remove history.
+Desktop Home/Open Recent entries show a localized File not found label and dimmed text/icons only after the OS reports NotFound (#3314). Checks run on one background worker, refresh every two seconds while the list is visible, and clear the marker when the file returns. Completed path checks update immediately, even while a later path is slow; the UI drains queued results without waiting for the worker to finish. Other I/O errors and browser filenames are not classified as missing. Entries stay clickable and retain the existing open-error feedback; this does not locate moved files or remove history.
 
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-21 | trivial | Recent files: missing paths are dimmed and labelled, checked on a background worker and refreshed while Home/Open is visible (#3314); estimates unchanged |
+| 2026-10-21 | trivial | Recent files: missing paths are dimmed and labelled, checked on a background worker with incremental results and refreshed while Home/Open is visible (#3314); estimates unchanged |
 | 2026-10-19 | trivial | Restrict Editing: with Filling in forms enforced, inserting content controls, their Properties and Remove Content Control are refused, as in Word (it greys them out), so a form's fields stay as they are and only their content is filled in |
 | 2026-10-19 | trivial | Content controls: text typed over a placeholder takes the control's own run properties (`w:sdtPr/w:rPr`, ECMA-376 §17.5.2.27), as in Word, and the placeholder style is recognised by its built-in name "Placeholder Text" whatever its localized id (German Word: `Platzhaltertext`), so entries in forms from localized Word no longer stay grey |
 | 2026-10-18 | trivial | Font list starts at its first row after clearing a no-match query; recent heading remains visible (#2068) |

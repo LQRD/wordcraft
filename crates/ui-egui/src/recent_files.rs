@@ -6,12 +6,18 @@ use std::time::{Duration, Instant};
 
 const REFRESH: Duration = Duration::from_secs(2);
 
+/// Deliver finished observations before slower paths complete; `Done` releases the worker slot.
+enum ProbeMessage {
+    Result(String, bool),
+    Done,
+}
+
 /// Cached observations of just the recent paths displayed on Home/Open. Unknown paths stay normal.
 #[derive(Default)]
 pub(crate) struct RecentFiles {
     paths: Vec<String>,
     missing: HashMap<String, bool>,
-    pending: Option<Receiver<Vec<(String, bool)>>>,
+    pending: Option<Receiver<ProbeMessage>>,
     next: Option<Instant>,
 }
 
@@ -24,17 +30,23 @@ impl RecentFiles {
             self.next = None;
         }
         if let Some(rx) = &self.pending {
-            match rx.try_recv() {
-                Ok(results) => {
-                    for (path, missing) in results {
+            let mut finished = false;
+            loop {
+                match rx.try_recv() {
+                    Ok(ProbeMessage::Result(path, missing)) => {
                         if self.paths.contains(&path) {
                             self.missing.insert(path, missing);
                         }
                     }
-                    self.pending = None;
+                    Ok(ProbeMessage::Done) | Err(TryRecvError::Disconnected) => {
+                        finished = true;
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => break,
                 }
-                Err(TryRecvError::Disconnected) => self.pending = None,
-                Err(TryRecvError::Empty) => {}
+            }
+            if finished {
+                self.pending = None;
             }
         }
         if !paths.is_empty() && self.pending.is_none() && self.next.is_none_or(|next| now >= next) {
@@ -45,14 +57,14 @@ impl RecentFiles {
             if std::thread::Builder::new()
                 .name("recent-files".into())
                 .spawn(move || {
-                    let results = paths
-                        .into_iter()
-                        .map(|path| {
-                            let missing = is_missing(std::fs::metadata(&path));
-                            (path, missing)
-                        })
-                        .collect();
-                    let _ = tx.send(results);
+                    for path in paths {
+                        let missing = is_missing(std::fs::metadata(&path));
+                        if tx.send(ProbeMessage::Result(path, missing)).is_err() {
+                            return;
+                        }
+                        wake.request_repaint();
+                    }
+                    let _ = tx.send(ProbeMessage::Done);
                     wake.request_repaint();
                 })
                 .is_ok()
@@ -134,5 +146,40 @@ mod tests {
         state.refresh(&ctx, &["not-yet-checked.docx".into()], Instant::now());
         assert!(state.pending.is_some());
         assert!(!state.missing("not-yet-checked.docx"));
+    }
+
+    /// Finished paths update immediately while a later probe still occupies the worker.
+    #[test]
+    fn recent_results_arrive_before_the_worker_finishes() {
+        let (tx, rx) = channel();
+        let now = Instant::now();
+        let paths = vec!["ready.docx".into(), "slow.docx".into()];
+        let mut state = RecentFiles { paths: paths.clone(), pending: Some(rx), next: Some(now + REFRESH), ..Default::default() };
+        let ctx = egui::Context::default();
+        tx.send(ProbeMessage::Result("ready.docx".into(), true)).unwrap();
+        tx.send(ProbeMessage::Result("removed.docx".into(), true)).unwrap();
+        state.refresh(&ctx, &paths, now);
+        assert!(state.missing("ready.docx"));
+        assert!(!state.missing("removed.docx"));
+        assert!(state.pending.is_some(), "a slow later path still owns the worker slot");
+        tx.send(ProbeMessage::Result("slow.docx".into(), true)).unwrap();
+        tx.send(ProbeMessage::Done).unwrap();
+        state.refresh(&ctx, &paths, now);
+        assert!(state.missing("slow.docx"));
+        assert!(state.pending.is_none(), "Done releases the worker without waiting for disconnection");
+    }
+
+    /// A worker that disconnects still delivers queued results and frees its slot.
+    #[test]
+    fn recent_disconnected_worker_keeps_completed_results() {
+        let (tx, rx) = channel();
+        let now = Instant::now();
+        let paths = vec!["ready.docx".into()];
+        let mut state = RecentFiles { paths: paths.clone(), pending: Some(rx), next: Some(now + REFRESH), ..Default::default() };
+        tx.send(ProbeMessage::Result("ready.docx".into(), true)).unwrap();
+        drop(tx);
+        state.refresh(&egui::Context::default(), &paths, now);
+        assert!(state.missing("ready.docx"));
+        assert!(state.pending.is_none());
     }
 }
