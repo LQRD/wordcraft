@@ -561,6 +561,7 @@ pub struct Prefs {
 }
 
 impl Default for Prefs {
+    /// Start with standard editing preferences and no user override for document zoom.
     fn default() -> Self {
         Prefs {
             count_notes: true,

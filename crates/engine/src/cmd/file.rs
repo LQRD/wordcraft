@@ -61,6 +61,7 @@ fn rename(s: &mut Session, v: &Value) -> CmdResult {
     Ok(json!({"name": name, "path": s.path}))
 }
 
+/// Register document lifecycle commands and their UI and automation contracts.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("file.rename", "Rename Document", "File › Info", rename).params(r#"{"name": string (document name without its extension)}"#).pure(),
@@ -205,6 +206,7 @@ fn normal_document(s: &Session) -> Document {
     d
 }
 
+/// Read and parse a document before replacing the session and applying its opening zoom.
 fn open(s: &mut Session, v: &Value) -> CmdResult {
     let Some(path) = p::str(v, "path") else {
         s.ui_requests.push(json!({"open": "openFile"}));

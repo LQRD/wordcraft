@@ -18,6 +18,7 @@ pub const MAX_WORD_CHARS: usize = 64;
 /// Most words one call may add or remove.
 const MAX_WORDS_PER_CALL: usize = 1000;
 
+/// Register the options command and its parameter contract for UI and automation.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("file.options", "Options", "File", options)
@@ -78,6 +79,7 @@ fn words_param(v: &Value, k: &str) -> Result<Vec<String>, CmdError> {
     Ok(out)
 }
 
+/// Validate all supplied preferences before applying them, or open the requested options pane.
 fn options(s: &mut Session, v: &Value) -> CmdResult {
     let pane = match p::str(v, "pane") {
         Some(name) if PANES.contains(&name) => name,
