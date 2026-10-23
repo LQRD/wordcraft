@@ -238,7 +238,8 @@ fn general(app: &mut WordApp, ui: &mut Ui) {
     egui::Grid::new("options_user").num_columns(2).spacing(vec2(8.0, 6.0)).show(ui, |ui| {
         ui.label(tl!("User name:"));
         let mut n = app.session.author.clone();
-        if ui.add(egui::TextEdit::singleline(&mut n).desired_width(260.0)).changed() {
+        let protected = wordcraft_engine::cmd::protect::enforced(&app.session.doc);
+        if ui.add_enabled(!protected, egui::TextEdit::singleline(&mut n).desired_width(260.0)).changed() && !protected {
             app.session.author = n;
         }
         ui.end_row();
@@ -824,6 +825,17 @@ mod tests {
         );
         h.run_steps(4);
         h
+    }
+
+    /// File › Options must not offer a way around the protected document's author check.
+    #[test]
+    fn user_name_field_disables_when_protection_starts() {
+        let mut h = nav_harness("en", 100);
+        let user_name = || egui_kittest::kittest::By::new().role(egui::accesskit::Role::TextInput).value("WordCraft User");
+        assert!(!h.get(user_name()).accesskit_node().is_disabled());
+        h.state_mut().run("review.restrict", json!({"mode": "readOnly"})).unwrap();
+        h.run_steps(4);
+        assert!(h.get(user_name()).accesskit_node().is_disabled());
     }
 
     /// #1266: check the actual painted text and renderer clip, including the bold selected

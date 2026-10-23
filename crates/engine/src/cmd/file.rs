@@ -14,16 +14,24 @@ pub const FORMAT_FLAT_OPC: &str = "flatopc";
 
 pub const MAX_AUTHOR_CHARS: usize = 255;
 
-/// Sets the user name that new tracked changes and comments are recorded under. The name is
-/// trimmed, stripped of control characters (they can't go into the saved XML) and cut to
-/// [`MAX_AUTHOR_CHARS`]; a blank name is refused so revisions always carry an author.
-pub(crate) fn set_author(s: &mut Session, v: &Value) -> CmdResult {
-    let name: String = p::req_str(v, "name")?.trim().chars().filter(|c| !c.is_control()).take(MAX_AUTHOR_CHARS).collect();
+/// The user name as it is stored: trimmed, stripped of control characters (they can't go into
+/// the saved XML) and cut to [`MAX_AUTHOR_CHARS`]; a blank name is refused so revisions always
+/// carry an author.
+pub fn normalize_author(name: &str) -> Result<String, CmdError> {
+    let name: String = name.trim().chars().filter(|c| !c.is_control()).take(MAX_AUTHOR_CHARS).collect();
     let name = name.trim_end();
     if name.is_empty() {
         return Err(CmdError::Params("`name` must not be blank".into()));
     }
-    s.author = name.to_string();
+    Ok(name.to_string())
+}
+
+/// Sets the user name that new tracked changes and comments are recorded under. The name is
+/// normalised by [`normalize_author`].
+/// A protected document refuses it: the name is the identity its exceptions are checked against.
+pub(crate) fn set_author(s: &mut Session, v: &Value) -> CmdResult {
+    super::protect::check_user_name(s)?;
+    s.author = normalize_author(p::req_str(v, "name")?)?;
     let mut r = sel_result(s)?;
     if let Some(o) = r.as_object_mut() {
         o.insert("name".into(), json!(s.author));
