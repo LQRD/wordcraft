@@ -32,9 +32,12 @@ pub struct PrintSettings {
     /// Scale to paper size (#2108): `none` prints the document's page sizes, a Layout › Size
     /// name scales every page onto that paper. The document itself is unchanged.
     pub paper: String,
+    /// Physical grid size or booklet binding, independent of document page setup.
+    pub pages_per_sheet: String,
 }
 
 impl Default for PrintSettings {
+    /// Start with one page per sheet and the document's paper size.
     fn default() -> Self {
         PrintSettings {
             range: "all".into(),
@@ -46,6 +49,7 @@ impl Default for PrintSettings {
             zoom: None,
             orientation: "auto".into(),
             paper: NO_SCALING.into(),
+            pages_per_sheet: "1".into(),
         }
     }
 }
@@ -59,6 +63,7 @@ impl PrintSettings {
             "copies": self.copies,
             "collate": self.collate,
             "orientation": self.orientation,
+            "pagesPerSheet": self.pages_per_sheet.parse::<u32>().map_or_else(|_| json!(self.pages_per_sheet), |n| json!(n)),
         });
         if self.range == "custom" {
             v["pages"] = json!(self.pages);
@@ -110,9 +115,9 @@ fn layout_of(app: &WordApp, ctx: &egui::Context) -> Arc<DocLayout> {
     l
 }
 
-/// The texture of one page, re-rendered only when the document, page or size changes.
-fn page_texture(app: &WordApp, ctx: &egui::Context, lay: &DocLayout, page: usize, width: f32) -> Option<TextureHandle> {
-    let id = egui::Id::new("print_page_texture");
+/// A bounded per-cell texture cache (at most 16 cells), refreshed when the page or scale changes.
+fn page_texture(app: &WordApp, ctx: &egui::Context, lay: &DocLayout, page: usize, cache_slot: usize, width: f32) -> Option<TextureHandle> {
+    let id = egui::Id::new(("print_page_texture", cache_slot));
     let key = (app.session.rev(), page, width as u32, (ctx.pixels_per_point() * 100.0) as u32);
     if let Some((k, t)) = ctx.data(|d| d.get_temp::<((u64, usize, u32, u32), TextureHandle)>(id))
         && k == key
@@ -165,9 +170,6 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     app.ui.print.copies = app.printing.settings.copies;
                 } else if hook {
                     ui.label(tl!("Send the document straight to the system print dialog, or save a copy in another format below."));
-                    ui.label(
-                        egui::RichText::new(tl!("The printer, two-sided printing and pages per sheet are chosen in that dialog.")).color(t.text_dim),
-                    );
                 } else {
                     ui.label(tl!("Save a copy in another format. Printing goes through a PDF you can print from any viewer."));
                 }
@@ -210,7 +212,30 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 }
                 choice(ui, "print_parity", &mut app.ui.print.parity, &PARITIES);
                 ui.label(egui::RichText::new(tl!("Orientation")).font(medium(13.0)));
-                choice(ui, "print_orientation", &mut app.ui.print.orientation, &ORIENTATIONS);
+                if app.ui.print.pages_per_sheet == "2" || app.ui.print.pages_per_sheet.starts_with("booklet") {
+                    ui.label(tl!("Landscape"));
+                } else {
+                    choice(ui, "print_orientation", &mut app.ui.print.orientation, &ORIENTATIONS);
+                }
+                ui.label(egui::RichText::new(tl!("Pages per sheet")).font(medium(13.0)));
+                choice(
+                    ui,
+                    "print_pages_per_sheet",
+                    &mut app.ui.print.pages_per_sheet,
+                    &[
+                        ("1", "1"),
+                        ("2", "2"),
+                        ("4", "4"),
+                        ("6", "6"),
+                        ("9", "9"),
+                        ("16", "16"),
+                        ("booklet", "Booklet (left binding)"),
+                        ("bookletReverse", "Booklet (right binding)"),
+                    ],
+                );
+                if app.ui.print.pages_per_sheet.starts_with("booklet") {
+                    ui.label(tl!("Booklets: duplex on the short edge. Blank pages are added at the end."));
+                }
                 // Word: Pages per sheet › Scale to paper size. Only the printout changes.
                 ui.label(egui::RichText::new(tl!("Scale to paper size")).font(medium(13.0)));
                 let papers: Vec<(&str, &str)> =
@@ -239,7 +264,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             });
         });
         ui.add_space(24.0);
-        ui.vertical(|ui| preview(app, ui, &lay, total));
+        ui.vertical(|ui| preview(app, ui, &lay));
     });
 }
 
@@ -256,14 +281,21 @@ fn zoom_step(z: f32, up: bool) -> f32 {
 
 /// The preview (#1156): the page fills the pane, a bar below pages through the document and
 /// zooms; zoomed in, the page scrolls both ways.
-fn preview(app: &mut WordApp, ui: &mut Ui, lay: &DocLayout, total: usize) {
+fn preview(app: &mut WordApp, ui: &mut Ui, lay: &DocLayout) {
     let t = Tokens::get(ui.ctx());
     let ctx = ui.ctx().clone();
-    let page = app.ui.print.preview;
-    let (page_w, page_h) = lay.pages.get(page).map_or((612.0, 792.0), |p| (p.w.max(1.0), p.h.max(1.0)));
-    // Scale to paper size: the sheet is the chosen paper with the page scaled and centred on it.
-    let sheet = app.ui.print.paper_size().map(|(w, h)| wordcraft_geom::fit_to_paper(page_w, page_h, w, h));
-    let (pw, ph) = sheet.map_or((page_w, page_h), |f| (f.paper_w, f.paper_h));
+    let sheets = match wordcraft_engine::print::sheets(&app.ui.print.params(), lay, app.session.current_pages(lay)) {
+        Ok(sheets) => sheets,
+        Err(error) => {
+            ui.label(error.to_string());
+            return;
+        }
+    };
+    let total = sheets.len();
+    let page = app.ui.print.preview.min(total.saturating_sub(1));
+    app.ui.print.preview = page;
+    let Some(sheet) = sheets.get(page) else { return };
+    let (pw, ph) = (sheet.width, sheet.height);
     let pane = vec2(ui.available_width().max(120.0), (ui.available_height() - PREVIEW_BAR).max(120.0));
     // Screen points per page point.
     let fit = ((pane.x - 2.0 * PREVIEW_MARGIN) / pw).min((pane.y - 2.0 * PREVIEW_MARGIN) / ph).max(0.01);
@@ -278,9 +310,14 @@ fn preview(app: &mut WordApp, ui: &mut Ui, lay: &DocLayout, total: usize) {
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Image, true, &label));
         ui.painter().rect_filled(r.translate(vec2(2.0, 3.0)), 0.0, t.page_shadow);
         ui.painter().rect(r, 0.0, egui::Color32::WHITE, Stroke::new(1.0, t.border_strong), egui::StrokeKind::Inside);
-        let on_sheet = sheet.map_or(r, |f| Rect::from_min_size(r.min + vec2(f.dx, f.dy) * scale, vec2(page_w, page_h) * f.k * scale));
-        if let Some(tex) = page_texture(app, &ctx, lay, page, on_sheet.width()) {
-            ui.painter().image(tex.id(), on_sheet, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), egui::Color32::WHITE);
+        for (cache_slot, slot) in sheet.slots.iter().enumerate() {
+            let Some(pg) = lay.pages.get(slot.page) else { continue };
+            let k = (slot.width / pg.w).min(slot.height / pg.h);
+            let offset = vec2(slot.x + (slot.width - pg.w * k) / 2.0, slot.y + (slot.height - pg.h * k) / 2.0);
+            let on_sheet = Rect::from_min_size(r.min + offset * scale, vec2(pg.w, pg.h) * k * scale);
+            if let Some(tex) = page_texture(app, &ctx, lay, slot.page, cache_slot, on_sheet.width()) {
+                ui.painter().image(tex.id(), on_sheet, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), egui::Color32::WHITE);
+            }
         }
     });
     ui.horizontal(|ui| {
