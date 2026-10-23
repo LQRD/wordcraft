@@ -101,25 +101,27 @@ fn choice(ui: &mut Ui, salt: &str, current: &mut String, items: &[(&str, &str)])
     changed
 }
 
-/// The output layout, kept while the document is unchanged (laying out every frame would be slow).
+/// The output layout, kept while the document and Print Markup setting are unchanged.
 fn layout_of(app: &WordApp, ctx: &egui::Context) -> Arc<DocLayout> {
     let id = egui::Id::new("print_page_layout");
     let rev = app.session.rev();
-    if let Some((r, l)) = ctx.data(|d| d.get_temp::<(u64, Arc<DocLayout>)>(id))
+    let markup = app.session.prefs.print_markup;
+    if let Some((r, m, l)) = ctx.data(|d| d.get_temp::<(u64, bool, Arc<DocLayout>)>(id))
         && r == rev
+        && m == markup
     {
         return l;
     }
-    let l = app.session.export_layout();
-    ctx.data_mut(|d| d.insert_temp(id, (rev, l.clone())));
+    let l = app.session.export_layout_with(markup);
+    ctx.data_mut(|d| d.insert_temp(id, (rev, markup, l.clone())));
     l
 }
 
-/// A bounded per-cell texture cache (at most 16 cells), refreshed when the page or scale changes.
+/// A bounded per-cell texture cache, refreshed when the page, scale or Print Markup changes.
 fn page_texture(app: &WordApp, ctx: &egui::Context, lay: &DocLayout, page: usize, cache_slot: usize, width: f32) -> Option<TextureHandle> {
     let id = egui::Id::new(("print_page_texture", cache_slot));
-    let key = (app.session.rev(), page, width as u32, (ctx.pixels_per_point() * 100.0) as u32);
-    if let Some((k, t)) = ctx.data(|d| d.get_temp::<((u64, usize, u32, u32), TextureHandle)>(id))
+    let key = (app.session.rev(), app.session.prefs.print_markup, page, width as u32, (ctx.pixels_per_point() * 100.0) as u32);
+    if let Some((k, t)) = ctx.data(|d| d.get_temp::<((u64, bool, usize, u32, u32), TextureHandle)>(id))
         && k == key
     {
         return Some(t);
@@ -386,5 +388,42 @@ pub fn export_formats(app: &mut WordApp, ui: &mut Ui) {
             app.export_dialog(ext);
         }
         ui.add_space(4.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Services;
+    use wordcraft_engine::Session;
+
+    /// Print Markup changes layout and pixels without changing the document revision.
+    #[test]
+    fn preview_refreshes_layout_and_texture_when_print_markup_toggles() {
+        let mut session = Session::new(wordcraft_doc::Document::from_text("Synthetic print preview"));
+        session.run("select.text", &json!({"text": "preview"})).unwrap();
+        session.run("review.newComment", &json!({"text": "Synthetic printed comment"})).unwrap();
+        session.prefs.markup.comments = true;
+        let mut app = WordApp::new(session, Services::default());
+        let ctx = egui::Context::default();
+        let rev = app.session.rev();
+        let dirty = app.session.dirty;
+        let mut previous = None;
+        for markup in [false, true, false] {
+            app.session.run("file.printMarkup", &json!({"value": markup})).unwrap();
+            let layout = layout_of(&app, &ctx);
+            assert_eq!(layout.pages[0].markup > 0.0, markup);
+            assert!(Arc::ptr_eq(&layout, &layout_of(&app, &ctx)), "unchanged layout is reused");
+            // Keep width fixed: an accidental scale change must not mask a stale texture.
+            let texture = page_texture(&app, &ctx, &layout, 0, 0, 300.0).unwrap();
+            assert_eq!(texture.id(), page_texture(&app, &ctx, &layout, 0, 0, 300.0).unwrap().id());
+            if let Some((old_layout, old_texture)) = previous.take() {
+                assert!(!Arc::ptr_eq(&layout, &old_layout));
+                assert_ne!(texture.id(), old_texture);
+            }
+            previous = Some((layout, texture.id()));
+            assert_eq!(app.session.rev(), rev);
+            assert_eq!(app.session.dirty, dirty);
+        }
     }
 }

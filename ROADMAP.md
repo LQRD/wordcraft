@@ -1,6 +1,6 @@
 # WordCraft roadmap
 
-> **Print imposition update:** 2026-10-23 · File > Print adds 2/4/6/9/16 logical pages per physical sheet side and left/right-bound booklets; preview and print PDF share sheet planning. This is print-only imposition, independent of document Page Setup (#2414). Readiness estimates unchanged.
+> **Print preview review update:** 2026-10-23 · Print preview follows Print Markup and invalidates both layout and per-cell textures when it changes; regression checks preserve document revision and dirty state. Readiness estimates unchanged. File > Print adds 2/4/6/9/16 logical pages per physical sheet side and left/right-bound booklets; preview and print PDF share sheet planning. This is print-only imposition, independent of document Page Setup (#2414). Readiness estimates unchanged.
 
 **Stage: alpha** · next: beta, ~15 points (60% → 75% ready for real work) and ~150–230 h away
 
@@ -160,6 +160,7 @@ Imported Word 97–2003 `.doc`/`.dot` files now ask for a supported DOCX target 
 - 2026-10-15: Find opens Navigation on Results; editing the query restores Results after manual Headings/Pages navigation. Typed and selected-text searches retain document contents (#2096).
 
 | Date | What landed |
+| 2026-10-23 | Print preview includes comment balloons when Print Markup is enabled and refreshes layout/textures on toggling; regression verifies both directions without editing the document (#3916 review). |
 | 2026-10-23 | File > Print: 2/4/6/9/16-up physical sheets and left/right-bound booklets, shared sheet preview, padded copies and print controls; translations are prepared in a separate PR. Independent of Page Setup #2414; printer driver depth remains. |
 | 2026-10-22 | Compare results opened as new or revised untitled documents start without the previous document's version snapshots. A comparison or mailing result rejected by protection keeps the snapshots and save target with the original document. |
 | 2026-10-20 | The Document Inspector's removals are refused while the document tracks changes: they delete straight from the document, so the text would go with no revision to show for it and the revision trail would be broken behind the user's back |
@@ -581,6 +582,7 @@ Footer page-table height and body wrapping are corrected. Other pagination gaps 
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-23 | trivial | Print preview follows Print Markup and invalidates both layout and per-cell textures when it changes; regression checks preserve document revision and dirty state. Readiness estimates unchanged. |
 | 2026-10-23 | trivial | Print-only N-up and booklet sheet imposition; shared preview/PDF geometry, copy padding and print controls. Readiness estimates unchanged. |
 | 2026-10-22 | minor | Compare's new and revised untitled results clear the previous document's version snapshots; a rejected protected comparison or mailing result preserves the snapshots and file identity. |
 | 2026-10-20 | minor | The Document Inspector's removals are refused while the document tracks changes (they delete straight from the document, so the text would go with no revision to show for it and the revision trail would be broken behind the user's back), and a version snapshot belongs to the document it was taken from |
