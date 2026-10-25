@@ -6,6 +6,7 @@ use wordcraft_doc::{Pos, Table};
 
 const WRAP_TEST_FONT: &str = "Source Sans 3";
 
+/// Lay out a synthetic document with a fresh cache and default options.
 fn lay(doc: &Document) -> DocLayout {
     let mut c = LayoutCache::new();
     layout(doc, &mut c, &LayoutOptions::default())

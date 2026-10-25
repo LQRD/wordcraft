@@ -107,6 +107,7 @@ fn all_objects(page: &Page, index: usize) -> impl Iterator<Item = ObjectHit> + '
     objects_in(&page.items, index).chain(objects_in(&page.header, index)).chain(objects_in(&page.footer, index))
 }
 
+/// Objects in reverse paint order, retaining each editable group member frame.
 fn objects_in(items: &[Placed], index: usize) -> impl Iterator<Item = ObjectHit> + '_ {
     items.iter().rev().filter_map(move |it| match it {
         Placed::Object { rect, spin, story, path, off, text_box, group_text_box, wrap, origin } => Some(ObjectHit {

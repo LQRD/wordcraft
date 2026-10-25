@@ -791,6 +791,7 @@ mod tests {
         (app, hit)
     }
 
+    /// Grouped text accepts pointer editing and undo while preserving the enclosing group.
     #[test]
     fn group_text_can_be_clicked_typed_and_undone_without_ungrouping() {
         use egui::{Event, PointerButton};
