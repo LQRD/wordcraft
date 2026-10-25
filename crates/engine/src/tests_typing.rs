@@ -1480,6 +1480,7 @@ fn alt_shift_left_and_right_promote_and_demote_headings_and_list_items() {
     assert_eq!(paras(&s), vec![para("One", Some(0)), para("Two", Some(0))]);
 }
 
+/// Vertical arrows enter the adjacent table from the line beside it.
 #[test]
 fn down_and_up_from_a_line_start_beside_a_table_go_into_it() {
     let mut s = typed("Intro line\n");
@@ -1557,6 +1558,7 @@ fn table_page_arrows_keep_the_column_and_document_unchanged() {
     assert_eq!(session.dirty, dirty);
 }
 
+/// Alt+X converts a Unicode character to its hexadecimal code and back.
 #[test]
 fn alt_x_toggles_between_a_character_and_its_code() {
     if !cfg!(target_os = "macos") {

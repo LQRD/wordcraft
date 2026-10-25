@@ -344,3 +344,5 @@ Small follow-ups from the 2026-10-25 field, table and AutoFormat batch (#4232):
 ## Layout validation fonts
 
 Four geometry-dependent regression controls request Source Sans 3 explicitly. Platform-installed substitutes otherwise change their expected line counts. Assertions remain unchanged; renderer font metrics and substitution gaps remain open.
+
+The #3591 navigation helpers and neighboring test entry points carry explicit function documentation for the minimum 80% documentation gate; this follow-up changes no runtime behavior.

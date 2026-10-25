@@ -472,6 +472,7 @@ impl DocLayout {
         self.caret_on(pos, 0)
     }
 
+    /// Caret geometry on the hinted occurrence of a repeating or continued story.
     pub fn caret_on(&self, pos: &Pos, page_hint: usize) -> Option<Caret> {
         for (pi, it) in self.pieces(pos.story, &pos.path, page_hint) {
             let Placed::Lines { para, l0, l1, x, y, turn, .. } = it else { continue };
@@ -835,6 +836,7 @@ impl DocLayout {
     }
 }
 
+/// Distance from a page point to a line, preferring a nearby line whose horizontal span contains it.
 fn score(l: &LineHit, x: f32, y: f32) -> f32 {
     let dy = if y < l.top {
         l.top - y

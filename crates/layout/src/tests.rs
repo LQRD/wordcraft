@@ -78,6 +78,7 @@ fn vertical_table_page_break_keeps_split_cell_lines() {
     }
 }
 
+/// Lay out a synthetic document with a fresh cache and default layout options.
 fn lay(doc: &Document) -> DocLayout {
     let mut c = LayoutCache::new();
     layout(doc, &mut c, &LayoutOptions::default())

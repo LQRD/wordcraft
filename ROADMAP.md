@@ -981,3 +981,5 @@ Footer page-table height and body wrapping are corrected. Other pagination gaps 
 | 2026-10-20 | trivial | Progress log: saving to a NAS share mounted by GVFS (#3003) |
 | 2026-10-23 | trivial | Progress log: "NaN" in the Font dialog's Size box no longer closes the app (#3663) |
 | 2026-10-23 | trivial | Progress log: a table cell span from a `.json` file no longer overflows (#3637) |
+
+The #3591 navigation helpers and neighboring test entry points carry explicit function documentation for the minimum 80% documentation gate; this follow-up changes no runtime behavior.

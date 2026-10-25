@@ -408,3 +408,5 @@ and balloon layout while supplying explicit cell identity at every box call. The
 probes above are historical; this rebase has no new native or other-platform measurement.
 
 Repeated table-cell control, 12 October 2026: four same-style contextual paragraphs with 6 pt before/after and exactly 24 pt lines retain zero extra gap at every boundary. The body control uses the same fixture. This is an original specification-based regression; no new native Word table comparison was run.
+
+The #3591 navigation helpers and neighboring test entry points carry explicit function documentation for the minimum 80% documentation gate; this follow-up changes no runtime behavior.
