@@ -16,9 +16,12 @@ use wordcraft_ui_egui::{Services, WordApp};
 
 static READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Applies the harness's pending raw input, runs one full app frame, and returns its wall-clock
+/// duration in milliseconds.
 fn step(h: &mut egui_kittest::Harness<'_, WordApp>) -> f64 {
     let mut raw = std::mem::take(h.input_mut());
-    h.state_mut().raw_input_hook(&mut raw);
+    let ctx = h.ctx.clone();
+    h.state_mut().raw_input_hook(&ctx, &mut raw);
     *h.input_mut() = raw;
     let t = Instant::now();
     h.step();
@@ -32,6 +35,8 @@ fn stats(v: &[f64]) -> serde_json::Value {
     json!({"n": s.len(), "med": (at(0.5) * 10.0).round() / 10.0, "p95": (at(0.95) * 10.0).round() / 10.0, "max": (at(1.0) * 10.0).round() / 10.0})
 }
 
+/// Opens the document named on the command line and prints JSON timings for start-up, typing,
+/// scrolling, zooming, ribbon tabs and window resizes.
 fn main() {
     let path = std::env::args().nth(1).expect("usage: perf_probe doc.docx [block]");
     let block: Option<usize> = std::env::args().nth(2).and_then(|b| b.parse().ok());
@@ -108,6 +113,7 @@ fn main() {
                 delta: egui::vec2(0.0, dy),
                 phase: egui::TouchPhase::Move,
                 modifiers: egui::Modifiers::NONE,
+                source: egui::MouseWheelSource::Unknown,
             });
             f.push(step(h));
         }
