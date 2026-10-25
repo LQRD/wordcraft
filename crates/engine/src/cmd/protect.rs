@@ -268,19 +268,48 @@ pub(crate) fn check_version_restore(s: &Session) -> Result<(), CmdError> {
     Ok(())
 }
 
+/// What decides a protected document's outright refusals: whether the current author may edit
+/// any exception (`w:permStart`), and how many content controls take entries. Both walk the
+/// whole document.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Facts {
+    pub exceptions: bool,
+    pub fillable: usize,
+}
+
+impl Facts {
+    pub(crate) fn of(s: &Session) -> Facts {
+        Facts { exceptions: s.doc.perm_ranges().iter().any(|r| editable_by(r, &s.author)), fillable: s.doc.fillable_controls() }
+    }
+}
+
 /// Why protection refuses command `id` whatever its params and the selection, so the ribbon greys
-/// it out ([`Session::why_disabled`]); cheap enough to ask for every button on every frame.
-/// Observed in Word for Mac: with Filling in forms enforced, the Developer tab's control buttons
-/// and Properties are greyed out and a field's shortcut menu offers no Remove Content Control.
-/// The form's fields stay as they are; only their content is filled in.
-pub(crate) fn greyed_out(s: &Session, id: &str) -> Option<&'static str> {
-    if s.doc.settings.protection.as_deref() != Some("forms") {
+/// it out ([`Session::why_disabled`], with [`Facts`] cached per document revision) and
+/// [`check_before`] refuses it. Observed in Word for Mac: with Filling in forms enforced, the
+/// Developer tab's control buttons and Properties are greyed out and a field's shortcut menu
+/// offers no Remove Content Control. The form's fields stay as they are; only their content is
+/// filled in. A document that is read only (or open to comments only) with no exception the
+/// author may edit takes no other edits at all.
+pub(crate) fn greyed_out(s: &Session, id: &str, facts: impl FnOnce() -> Facts) -> Option<&'static str> {
+    let mode = s.doc.settings.protection.as_deref()?;
+    if always_allowed(id, &Value::Null) {
         return None;
     }
-    match id {
-        "developer.removeControl" => Some("stop protection before removing a content control"),
-        "developer.properties" => Some("stop protection before changing a content control's properties"),
-        _ if CONTROL_INSERTS.contains(&id) => Some("stop protection before inserting a content control"),
+    if mode == "forms" {
+        match id {
+            "developer.removeControl" => return Some("stop protection before removing a content control"),
+            "developer.properties" => return Some("stop protection before changing a content control's properties"),
+            _ if CONTROL_INSERTS.contains(&id) => return Some("stop protection before inserting a content control"),
+            _ => {}
+        }
+    }
+    let comment_ok = id.starts_with("review.") && (id.contains("Comment") || id == "review.reply");
+    let tracked = matches!(id, "review.accept" | "review.reject" | "review.acceptAll" | "review.rejectAll" | "review.trackChanges");
+    match mode {
+        "readOnly" => (!facts().exceptions).then_some("the document is protected (read only)"),
+        "forms" => (facts().fillable == 0).then_some("the document is protected (read only)"),
+        "comments" if !comment_ok => (!facts().exceptions).then_some("only comments are allowed in this document"),
+        "trackedChanges" if tracked => Some("changes to this document are tracked"),
         _ => None,
     }
 }
@@ -325,25 +354,18 @@ pub(crate) fn check_before(s: &Session, id: &str, params: &Value) -> Result<bool
             _ => {}
         }
     }
-    if let Some(why) = greyed_out(s, id) {
+    if let Some(why) = greyed_out(s, id, || Facts::of(s)) {
         return Err(CmdError::Disabled(format!("{id}: {why}")));
     }
     if s.doc.settings.protect_formatting {
         check_formatting(s, id, params)?;
     }
+    // Not refused outright: read only and comments mode have an exception this author may edit,
+    // forms mode has fillable controls. Comments are always allowed in comments mode.
     let comment_ok = id.starts_with("review.") && (id.contains("Comment") || id == "review.reply");
-    let exceptions = || s.doc.perm_ranges().iter().any(|r| editable_by(r, &s.author));
     match mode {
-        "readOnly" if exceptions() => Ok(true),
-        // Filling in forms: the interiors of controls that allow it stay editable.
-        "forms" if s.doc.fillable_controls() > 0 => Ok(true),
-        "readOnly" | "forms" => Err(CmdError::Disabled(format!("{id}: the document is protected (read only)"))),
         "comments" if comment_ok => Ok(false),
-        "comments" if exceptions() => Ok(true),
-        "comments" => Err(CmdError::Disabled(format!("{id}: only comments are allowed in this document"))),
-        "trackedChanges" if matches!(id, "review.accept" | "review.reject" | "review.acceptAll" | "review.rejectAll" | "review.trackChanges") => {
-            Err(CmdError::Disabled(format!("{id}: changes to this document are tracked")))
-        }
+        "readOnly" | "forms" | "comments" => Ok(true),
         _ => Ok(false),
     }
 }
@@ -615,6 +637,35 @@ pub(crate) fn protection_lifted(before: &Document, after: &Document) -> bool {
     b.protection.is_some() && (a.protection != b.protection || a.protect_formatting != b.protect_formatting || a.protect_hash != b.protect_hash)
 }
 
+/// Where typing at the caret `p` goes in a document that is read only or open to comments only: a
+/// caret right before the start of an exception this author may edit goes inside it, and one right
+/// after its end goes back inside it. The markers take no room, so the start of a line that an
+/// exception starts, and the end of a line that one ends, are those carets.
+pub(crate) fn typing_pos(s: &Session, p: &Pos) -> Pos {
+    if !matches!(s.doc.settings.protection.as_deref(), Some("readOnly" | "comments")) {
+        return p.clone();
+    }
+    let Some(para) = s.doc.para_at(p) else { return p.clone() };
+    if para.objects.is_empty() {
+        return p.clone();
+    }
+    let editable: Vec<u32> = s.doc.perm_ranges().iter().filter(|r| editable_by(r, &s.author)).map(|r| r.id).collect();
+    let is_start = |off: usize| matches!(para.object_at(off), Some(InlineObject::PermStart { id, .. }) if editable.contains(id));
+    let is_end = |off: usize| matches!(para.object_at(off), Some(InlineObject::PermEnd { id }) if editable.contains(id));
+    let w = OBJ.len_utf8();
+    let mut off = p.off;
+    if is_start(off) {
+        while is_start(off) {
+            off += w;
+        }
+        return Pos { off, ..p.clone() };
+    }
+    while off >= w && is_end(off - w) {
+        off -= w;
+    }
+    Pos { off, ..p.clone() }
+}
+
 /// The first position in an editable range after `from` (wrapping round), for Find Next Region
 /// I Can Edit; with it, the range's end. Filling in forms: the next fillable control's content.
 pub fn next_region(s: &Session, from: &Pos) -> Option<(Pos, Pos)> {
@@ -665,6 +716,49 @@ mod tests {
             let _ = s.run("edit.undo", &json!({}));
         }
         assert_eq!(s.doc.settings.protection.as_deref(), Some("readOnly"));
+    }
+
+    /// An exception that starts a line: Home, Left and Down put the caret before its start
+    /// marker, and Enter and typing there go inside the exception. A caret after the end marker at
+    /// the end of the line goes back inside it too.
+    #[test]
+    fn typing_at_the_start_or_end_of_an_exception_line_goes_inside_it() {
+        let visible = |s: &Session| s.doc.plain_text(StoryRef::Body).replace(OBJ, "");
+        let mut s = Session::new(Document::from_text("Title\nBody text\nEnd."));
+        select(&mut s, "Body text");
+        s.run("review.restrict", &json!({"exception": "add"})).unwrap();
+        s.run("review.restrict", &json!({"mode": "readOnly"})).unwrap();
+        s.run("caret.home", &json!({})).unwrap();
+        assert_eq!(s.sel.focus, Pos::body(1, 0), "the caret is before the start marker");
+        s.run("text.newParagraph", &json!({})).unwrap();
+        s.run("text.insert", &json!({"text": "New "})).unwrap();
+        assert_eq!(visible(&s), "Title\n\nNew Body text\nEnd.");
+        s.run("caret.end", &json!({})).unwrap();
+        s.run("text.insert", &json!({"text": "!"})).unwrap();
+        s.run("text.newParagraph", &json!({})).unwrap();
+        assert_eq!(visible(&s), "Title\n\nNew Body text!\n\nEnd.");
+        // Outside the exception stays refused: the start of "Title" and the end of "End.".
+        for at in [Pos::body(0, 0), s.doc.end_of(StoryRef::Body)] {
+            s.sel = Selection::caret(at);
+            assert!(s.run("text.newParagraph", &json!({})).is_err());
+            assert!(s.run("text.insert", &json!({"text": "x"})).is_err());
+        }
+
+        // An empty editable line right after a protected short line, with Built-in Heading styles
+        // on: two Enters break the paragraph, and the protected line stays Normal text.
+        let mut s = Session::new(Document::from_text("Title\n\nEnd."));
+        s.run("tools.autocorrect", &json!({"headingStyles": true})).unwrap();
+        s.sel = Selection { anchor: Pos::body(1, 0), focus: Pos::body(2, 0) };
+        s.run("review.restrict", &json!({"exception": "add"})).unwrap();
+        s.run("review.restrict", &json!({"mode": "readOnly"})).unwrap();
+        s.sel = Selection::caret(Pos::body(0, 2));
+        s.run("caret.down", &json!({})).unwrap();
+        assert_eq!(s.sel.focus, Pos::body(1, 0), "the caret is before the start marker");
+        s.run("text.newParagraph", &json!({})).unwrap();
+        s.run("text.newParagraph", &json!({})).unwrap();
+        s.run("text.insert", &json!({"text": "Notes"})).unwrap();
+        assert_eq!(visible(&s), "Title\n\n\nNotes\nEnd.");
+        assert!(s.doc.body.iter().filter_map(|b| b.as_para()).all(|p| p.props.style.is_none()));
     }
 
     /// Table, row and cell formatting reaches protected text, so an exception inside one cell
@@ -1091,6 +1185,59 @@ mod tests {
         s.run("review.restrict", &json!({"stop": true})).unwrap();
         s.run("developer.removeControl", &json!({"control": "name"})).unwrap();
         assert!(s.doc.control_ranges(StoryRef::Body).is_empty());
+    }
+
+    /// Read only and comments-only protection grey out every edit when the document has no
+    /// exception the author may edit, and none once it has one (the selection decides then).
+    /// Comments stay available in comments mode (not in read only); file commands, Restrict Editing
+    /// and moving the caret always do.
+    #[test]
+    fn read_only_and_comments_grey_out_edits_without_an_exception() {
+        let mut s = Session::new(Document::from_text("Locked intro.\nFill in here."));
+        s.run("review.restrict", &json!({"mode": "readOnly"})).unwrap();
+        for id in ["text.insert", "format.bold", "para.alignCenter", "review.newComment"] {
+            assert_eq!(s.why_disabled(id), Some("the document is protected (read only)"), "{id}");
+        }
+        for id in ["review.restrict", "file.save", "caret.right"] {
+            assert_eq!(s.why_disabled(id), None, "{id}");
+        }
+        s.run("review.restrict", &json!({"stop": true})).unwrap();
+        s.run("review.restrict", &json!({"mode": "comments"})).unwrap();
+        assert_eq!(s.why_disabled("text.insert"), Some("only comments are allowed in this document"));
+        assert_eq!(s.why_disabled("review.newComment"), None);
+        // Tracked changes: typing stays live, accepting or rejecting the changes doesn't.
+        s.run("review.restrict", &json!({"stop": true})).unwrap();
+        s.run("review.restrict", &json!({"mode": "trackedChanges"})).unwrap();
+        assert_eq!(s.why_disabled("text.insert"), None);
+        assert_eq!(s.why_disabled("review.acceptAll"), Some("changes to this document are tracked"));
+        // An exception for everyone: edits are no longer refused outright (the cached facts follow
+        // the edit that added it).
+        s.run("review.restrict", &json!({"stop": true})).unwrap();
+        select(&mut s, "Fill in here.");
+        s.run("review.restrict", &json!({"exception": "add"})).unwrap();
+        s.run("review.restrict", &json!({"mode": "readOnly"})).unwrap();
+        assert_eq!(s.why_disabled("text.insert"), None);
+        assert_eq!(s.why_disabled("format.bold"), None);
+    }
+
+    /// Track Changes Options stays available (its options are the user's own), but tracking
+    /// moves is the document's setting: protection refuses changing it, even with an exception.
+    #[test]
+    fn protection_refuses_changing_track_moves_but_not_the_view_options() {
+        let mut s = Session::new(Document::from_text("Locked intro.\nFill in here."));
+        select(&mut s, "Fill in here.");
+        s.run("review.restrict", &json!({"exception": "add"})).unwrap();
+        for mode in ["readOnly", "comments", "forms"] {
+            s.run("review.restrict", &json!({"mode": mode})).unwrap();
+            assert_eq!(s.why_disabled("review.trackingOptions"), None, "{mode}");
+            assert!(s.run("review.trackingOptions", &json!({"trackMoves": false})).is_err(), "{mode}");
+            assert!(s.doc.settings.track_moves, "{mode}");
+            s.run("review.trackingOptions", &json!({"insertColor": "00AA00"})).unwrap();
+            s.run("review.restrict", &json!({"stop": true})).unwrap();
+        }
+        s.run("review.restrict", &json!({"mode": "trackedChanges"})).unwrap();
+        s.run("review.trackingOptions", &json!({"trackMoves": false})).unwrap();
+        assert!(!s.doc.settings.track_moves);
     }
 
     /// The ribbon greys out what forms mode refuses outright (as Word for Mac does), and only that:
