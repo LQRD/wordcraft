@@ -556,7 +556,7 @@ fn open_list(app: &mut WordApp, ui: &mut Ui) {
         }
         let resp = resp.on_hover_text(if missing { format!("{p}\n{}", tl!("File not found")) } else { p.clone() });
         if resp.clicked() {
-            let failed = open_recent(app, p).err();
+            let failed = open_recent(app, &p).err();
             ui.ctx().data_mut(|d| d.insert_temp(open_error_id(), failed.unwrap_or_default()));
         }
     }
