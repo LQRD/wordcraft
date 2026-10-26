@@ -39,6 +39,7 @@ fn confined(tag: &str, read: bool, write: bool) -> (Server, PathBuf) {
     (Server::new(Box::new(Headless::default().with_automation_roots(roots))), base)
 }
 
+/// Converts a fixture path into the string accepted by MCP JSON parameters.
 fn s(p: &Path) -> String {
     p.to_string_lossy().into_owned()
 }
@@ -52,22 +53,26 @@ fn call(server: &mut Server, name: &str, args: Value) -> (bool, String) {
     (result["isError"] == true, text)
 }
 
+/// Calls an MCP tool and returns its text only when the protocol reports success.
 fn ok(server: &mut Server, name: &str, args: Value) -> String {
     let (error, text) = call(server, name, args.clone());
     assert!(!error, "{name} {args}: {text}");
     text
 }
 
+/// Verifies that an MCP tool refuses the request and reports the expected reason.
 fn refused(server: &mut Server, name: &str, args: Value, why: &str) {
     let (error, text) = call(server, name, args.clone());
     assert!(error && text.contains(why), "{name} {args} should be refused ({why}): {text}");
 }
 
+/// Dispatches an engine command through the MCP execute tool and returns its error flag and text.
 fn run(server: &mut Server, command: &str, params: Value) -> (bool, String) {
     call(server, "execute", json!({"command": command, "params": params}))
 }
 
 #[test]
+/// Opening a file accepts the configured read root and rejects paths outside it.
 fn files_open_only_from_inside_the_read_root() {
     let (mut server, base) = confined("open", true, true);
     let sep = std::path::MAIN_SEPARATOR;
@@ -92,6 +97,7 @@ fn files_open_only_from_inside_the_read_root() {
 }
 
 #[test]
+/// Commands that consume external files obey the same read-root restriction as opening documents.
 fn commands_that_read_a_path_are_held_to_the_read_root() {
     let (mut server, base) = confined("reads", true, true);
     let outside = s(&base.join("outside/secret.txt"));
@@ -126,6 +132,7 @@ fn commands_that_read_a_path_are_held_to_the_read_root() {
 }
 
 #[test]
+/// Saving and exporting accept the write root while leaving all outside fixture files untouched.
 fn saves_and_exports_go_only_into_the_write_root() {
     let (mut server, base) = confined("write", true, true);
     let sep = std::path::MAIN_SEPARATOR;
@@ -176,6 +183,7 @@ fn saves_and_exports_go_only_into_the_write_root() {
 }
 
 #[test]
+/// Omitting a read or write root grants no access of that kind.
 fn a_root_left_out_grants_none_of_its_access() {
     let (mut server, base) = confined("read-only", true, false);
     ok(&mut server, "open_document", json!({"path": s(&base.join("in/a.txt"))}));
@@ -189,6 +197,7 @@ fn a_root_left_out_grants_none_of_its_access() {
 }
 
 #[test]
+/// Links whose targets escape an allowed root cannot read or write outside it.
 fn links_out_of_a_root_are_refused() {
     let (mut server, base) = confined("links", true, true);
     #[cfg(unix)]
@@ -219,6 +228,7 @@ fn names(dir: &Path) -> Vec<String> {
 
 #[cfg(unix)]
 #[test]
+/// An alias outside the write root cannot be replaced even when its target lies inside it.
 fn a_link_outside_the_write_root_into_it_is_not_written() {
     // #3735: the link's target is inside the write root, but a save replaces the link itself,
     // and its temporary file would sit beside it, outside.

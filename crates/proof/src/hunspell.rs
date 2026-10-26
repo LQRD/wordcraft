@@ -320,6 +320,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// Oversized dictionaries and non-regular paths are refused before their contents are read.
     #[test]
     fn reads_are_bounded_and_regular_files_only() {
         let dir = std::env::temp_dir().join(format!("wordcraft-hunspell-cap-{}", std::process::id()));

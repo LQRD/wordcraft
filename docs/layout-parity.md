@@ -270,7 +270,6 @@ layout suite are pending; this is not a new Word/native-IME acceptance claim.
 |---|---|---|
 | 2026-10-25 | trivial | Integrate table page navigation (#3591) with main 5dd5e8b3 and egui 0.37. |
 | 2026-10-25 | trivial | Integrate #3591 table navigation with current main; preserve newer layout, field and typing changes and their progress history. |
-| 2026-10-23 | trivial | Table arrow navigation crosses page boundaries in the same column and skips repeated header copies; split-cell continuation lines remain reachable (#3591). Readiness estimates unchanged. |
 | 2026-10-25 | trivial | Arabic list labels: `arabicAlpha` and `arabicAbjad` draw the 28 Arabic letters (alphabetical and abjad order), doubling past the last letter; Hebrew, Hindi, Thai and Vietnamese still show decimal (`doc::section::tests::arabic_letters_count_in_both_orders`) |
 | 2026-10-24 | trivial | Preserve grapheme edit/wrap boundaries across independently drawn font/style pieces; original emoji regression retained, new mixed-style/bundled-font LTR/bidi controls pending managed validation |
 | 2026-10-24 | trivial | Exact-spacing table contact uses the specified line height in row selection and word skipping; large/small mark regressions in modes 11/12/14/15 (#3977); shape estimates unchanged |
