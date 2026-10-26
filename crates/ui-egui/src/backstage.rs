@@ -29,6 +29,8 @@ fn back_chevron_c(band_min_x: f32, center_y: f32, fullscreen: bool, content_left
     pos2(band_min_x + x, center_y)
 }
 
+/// Draws the Backstage side menu and the active page. Without a document only the Home, New, Open
+/// and Options pages work, and it handles Back, Escape, Save, Save As and Close routing.
 pub fn show(app: &mut WordApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // No document open (#1129): only the pages that open or create one, and Options.
@@ -53,7 +55,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 }
                 // The chevron's stroke starts at the content edge.
                 let c = back_chevron_c(band.min.x, band.center().y, app.session.view.full_screen, app.mac_titlebar.content_left);
-                let resp = ui.interact(Rect::from_center_size(c, vec2(22.0, band.height())), ui.id().with("backstage_back"), Sense::click());
+                let resp = ui.interact(Rect::from_center_size(c, vec2(22.0, band.height())), ui.scope_id().with("backstage_back"), Sense::click());
                 icons::paint(ui.painter(), Rect::from_center_size(c, vec2(18.0, 18.0)), "chevronLeft", egui::Color32::WHITE, egui::Color32::WHITE);
                 resp
             } else {
@@ -62,7 +64,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 // not also close the File page, same as the macOS chevron fix (#2972) below.
                 let (r, _) = ui.allocate_exact_size(vec2(200.0, 40.0), Sense::hover());
                 let c = pos2(r.min.x + 26.0, r.center().y);
-                let resp = ui.interact(Rect::from_center_size(c, vec2(22.0, r.height())), ui.id().with("backstage_back"), Sense::click());
+                let resp = ui.interact(Rect::from_center_size(c, vec2(22.0, r.height())), ui.scope_id().with("backstage_back"), Sense::click());
                 icons::paint(ui.painter(), Rect::from_center_size(c, vec2(18.0, 18.0)), "chevronLeft", egui::Color32::WHITE, egui::Color32::WHITE);
                 resp
             };
@@ -76,7 +78,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 // No document open (#1129): Info, Save, Save As, Print and Export are greyed out.
                 let on = has_document || works_without_document(id);
                 let (r, resp) = ui.add_enabled_ui(on, |ui| ui.allocate_exact_size(vec2(200.0, 38.0), Sense::click())).inner;
-                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, on, tl!(label)));
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, on, tl!(label)));
                 let active = app.ui.backstage_page == id;
                 if active {
                     ui.painter().rect_filled(r, 0.0, egui::Color32::from_white_alpha(46));
@@ -124,7 +126,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                 for (label, id) in [("About", "about"), ("Discord community", "discord")] {
                     let (r, resp) = ui.allocate_exact_size(vec2(200.0, 32.0), Sense::click());
-                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(label)));
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(label)));
                     if resp.hovered() {
                         ui.painter().rect_filled(r, 0.0, egui::Color32::from_white_alpha(26));
                     }
@@ -222,6 +224,8 @@ fn heading(ui: &mut Ui, s: &str) {
     ui.add_space(16.0);
 }
 
+/// Draws a template thumbnail and caption as one accessible button, lazily renders and caches a
+/// region-aware page preview, and creates a document from the template on click.
 fn template_tile(ui: &mut Ui, app: &mut WordApp, label: &str, template: &str) {
     let t = Tokens::get(ui.ctx());
     ui.vertical(|ui| {
@@ -231,7 +235,7 @@ fn template_tile(ui: &mut Ui, app: &mut WordApp, label: &str, template: &str) {
         let caption = crate::i18n::tc("template", label);
         let galley = ui.painter().layout_no_wrap(caption.to_string(), regular(12.5), ui.visuals().text_color());
         let (tile, resp) = ui.allocate_exact_size(vec2(galley.size().x.max(150.0), 194.0 + galley.size().y), Sense::click());
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), caption));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), caption));
         let r = Rect::from_min_size(tile.min, vec2(150.0, 194.0));
         ui.painter().rect(
             r,
@@ -243,7 +247,7 @@ fn template_tile(ui: &mut Ui, app: &mut WordApp, label: &str, template: &str) {
         let ppp = ui.ctx().pixels_per_point();
         let key = format!("tpl:{template}:{ppp}");
         let region = app.session.region();
-        let tex = ui.ctx().data(|d| d.get_temp::<egui::TextureHandle>(egui::Id::new(&key))).or_else(|| {
+        let tex = ui.ctx().data(|d| d.get_temp::<egui::TextureHandle>(egui::Id::unique(&key))).or_else(|| {
             let mut s = wordcraft_engine::Session::new(wordcraft_doc::Document::new());
             // The blank tile shows the region's paper (#838).
             s.system_region = region;
@@ -257,7 +261,7 @@ fn template_tile(ui: &mut Ui, app: &mut WordApp, label: &str, template: &str) {
                 egui::ColorImage::from_rgba_unmultiplied([img.width as usize, img.height as usize], &px),
                 egui::TextureOptions::LINEAR,
             );
-            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(&key), h.clone()));
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique(&key), h.clone()));
             Some(h)
         });
         if let Some(h) = tex {
@@ -325,7 +329,7 @@ fn home_page(app: &mut WordApp, ui: &mut Ui) {
 fn new_page(app: &mut WordApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     heading(ui, "New");
-    let id = egui::Id::new("backstage_template_search");
+    let id = app.window_id("backstage_template_search");
     let mut query = ui.ctx().data(|d| d.get_temp::<String>(id)).unwrap_or_default();
     let search = ui.add(egui::TextEdit::singleline(&mut query).hint_text(tl!("Search for templates")).desired_width(360.0));
     if search.changed() {
@@ -404,8 +408,9 @@ struct PersonalListing {
     templates: Vec<PersonalTemplate>,
 }
 
+/// Stable storage id for the personal-template listing cache.
 fn personal_listing_id() -> egui::Id {
-    egui::Id::new("backstage_personal_templates")
+    egui::Id::unique("backstage_personal_templates")
 }
 
 #[cfg(test)]
@@ -498,11 +503,14 @@ fn open_personal(app: &mut WordApp, path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Stable storage id for the personal-template listing error.
 fn personal_error_id() -> egui::Id {
-    egui::Id::new("backstage_personal_error")
+    egui::Id::unique("backstage_personal_error")
 }
 
-/// Show clickable recent documents using cached availability, without filesystem work while painting.
+/// Draws the Recent documents list, distinguishes duplicate names by path for screen readers, and
+/// stores an open failure in this page's temporary state.
+/// Availability comes from cached worker results; painting never probes the filesystem.
 fn open_list(app: &mut WordApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(tl!("Recent")).font(semibold(16.0)));
@@ -532,7 +540,7 @@ fn open_list(app: &mut WordApp, ui: &mut Ui) {
         // Preserve path disambiguation for screen readers when file names repeat.
         let spoken = if names.iter().filter(|n| **n == name).count() > 1 { format!("{name}, {p}") } else { name.clone() };
         let label = if missing { format!("{spoken}. {status}") } else { spoken };
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &label));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &label));
         if resp.hovered() {
             ui.painter().rect_filled(r, 4.0, t.hover);
         }
@@ -547,10 +555,9 @@ fn open_list(app: &mut WordApp, ui: &mut Ui) {
         let status = ui.painter().layout_no_wrap(status.into(), regular(11.0), t.text_dim);
         let text_right = if missing { r.max.x - status.size().x - 12.0 } else { r.max.x };
         let text = ui.painter().with_clip_rect(r.intersect(Rect::from_min_max(r.min, pos2(text_right, r.max.y))));
-        let display_name = crate::canvas::bidi_display(&name);
-        let display_p = crate::canvas::bidi_display(&p);
-        text.text(pos2(r.min.x + 40.0, r.min.y + 13.0), Align2::LEFT_CENTER, display_name.as_ref(), medium(13.0), fade(t.text));
-        text.text(pos2(r.min.x + 40.0, r.min.y + 29.0), Align2::LEFT_CENTER, display_p.as_ref(), regular(11.0), fade(t.text_dim));
+        // egui 0.37 handles bidirectional text from the original logical strings.
+        text.text(pos2(r.min.x + 40.0, r.min.y + 13.0), Align2::LEFT_CENTER, &name, medium(13.0), fade(t.text));
+        text.text(pos2(r.min.x + 40.0, r.min.y + 29.0), Align2::LEFT_CENTER, &p, regular(11.0), fade(t.text_dim));
         if missing {
             ui.painter().galley(pos2(r.max.x - status.size().x, r.center().y - status.size().y / 2.0), status, t.text_dim);
         }
@@ -562,8 +569,9 @@ fn open_list(app: &mut WordApp, ui: &mut Ui) {
     }
 }
 
+/// Stable storage id for the Recent list's open error.
 fn open_error_id() -> egui::Id {
-    egui::Id::new("backstage_open_error")
+    egui::Id::unique("backstage_open_error")
 }
 
 /// Drop the Recent list's open error once File is closed, so it doesn't come back next time.
@@ -578,7 +586,7 @@ pub(crate) fn forget_open_error(ctx: &egui::Context) {
 /// render loop skips the status bar, so a failed write (no permission, disk full, a bad path)
 /// needs its own place to say why, or the page just sits there with a Browse… button and no clue.
 pub(crate) fn save_as_error_id() -> egui::Id {
-    egui::Id::new("backstage_save_as_error")
+    egui::Id::unique("backstage_save_as_error")
 }
 
 /// Drop the Save As page's error once File is closed or a later save succeeds, so it doesn't
@@ -589,8 +597,8 @@ pub(crate) fn forget_save_as_error(ctx: &egui::Context) {
 
 /// Open a file from the Recent list. A file that can't be opened (deleted, moved, unreadable)
 /// leaves File open so the list can say why, rather than closing it on a greyed-out window.
-fn open_recent(app: &mut WordApp, path: &str) -> Result<(), String> {
-    app.run("file.open", json!({"path": path}))?;
+pub(crate) fn open_recent(app: &mut WordApp, path: &str) -> Result<(), String> {
+    app.open_file(path, None)?;
     app.ui.backstage = false;
     app.canvas.want_focus = true;
     Ok(())
@@ -673,6 +681,15 @@ fn info_page(app: &mut WordApp, ui: &mut Ui) {
         }
         if focused != app.info_editing.map(|(f, _)| f) {
             app.info_editing = None;
+        }
+        // Advanced Properties › Custom (#2982): view and edit the document's custom properties.
+        ui.add_space(6.0);
+        if ui
+            .button(egui::RichText::new(tl!("Advanced Properties…")).font(medium(13.5)))
+            .on_hover_text(tl!("View and edit the document's custom properties."))
+            .clicked()
+        {
+            let _ = app.run("ui.dialog", json!({"name": "customProperties"}));
         }
         // Protect Document › Encrypt with Password (#55).
         ui.add_space(18.0);
@@ -1104,29 +1121,27 @@ mod tests {
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
-    fn recovery_restore_uses_save_changes_and_resets_autosave_permission() {
+    fn recovery_restore_opens_beside_unsaved_work_without_autosave_permission() {
         let (app, root) = recovery_app();
         let mut h = recovery_harness(app);
         settle_recovery(&mut h);
         h.state_mut().execute("text.insert", json!({"text": "Current unsaved work"})).unwrap();
+        let work = h.state().session.document_id();
         h.state_mut().autosave_path = Some(root.join("must-not-write.docx"));
         h.state_mut().run("file.recover", json!({})).unwrap();
         h.run_steps(4);
         assert_eq!(h.state().session.recovery_documents().len(), 1);
         h.get_by_label("Restore").click();
-        h.run_steps(4);
-        assert!(matches!(h.state().dialog, Some(crate::dialogs::Dialog::SaveChanges { .. })));
-        h.get_by_label("Cancel").click();
-        h.run_steps(4);
-        assert_eq!(h.state().session.doc.plain_text(wordcraft_doc::StoryRef::Body), "Current unsaved work");
-        h.get_by_label("Restore").click();
-        h.run_steps(4);
-        h.get_by_label("Don't Save").click();
         settle_recovery(&mut h);
+        assert!(h.state().dialog.is_none(), "nothing is replaced, so nothing to ask");
+        assert_ne!(h.state().session.document_id(), work);
         assert_eq!(h.state().session.doc.plain_text(wordcraft_doc::StoryRef::Body), "Recovered synthetic work");
         assert!(h.state().session.dirty && h.state().session.path.is_none());
         assert!(h.state().autosave_path.is_none());
         assert!(!h.state().ui.backstage);
+        let kept = h.state_mut().session.with_document(work, |s| s.doc.plain_text(wordcraft_doc::StoryRef::Body)).unwrap();
+        assert_eq!(kept, "Current unsaved work");
+        assert!(h.state().session.recovery_documents().is_empty(), "the restored document keeps the copy");
         assert!(!root.join("must-not-write.docx").exists());
         drop(h);
         let _ = std::fs::remove_dir_all(root);
@@ -1188,14 +1203,15 @@ mod tests {
         assert!(h.query_by_label("Report").is_some(), "the built-in templates stay");
 
         // The search covers both.
-        h.ctx.data_mut(|d| d.insert_temp(egui::Id::new("backstage_template_search"), "memo".to_string()));
+        let search = h.state().window_id("backstage_template_search");
+        h.ctx.data_mut(|d| d.insert_temp(search, "memo".to_string()));
         h.run_steps(3);
         assert!(h.query_by_label("Team memo").is_some(), "search finds a personal template");
         assert!(h.query_by_label("Contract").is_none() && h.query_by_label("Report").is_none());
-        h.ctx.data_mut(|d| d.insert_temp(egui::Id::new("backstage_template_search"), "zzz".to_string()));
+        h.ctx.data_mut(|d| d.insert_temp(search, "zzz".to_string()));
         h.run_steps(3);
         assert!(h.query_by_label("No templates match your search.").is_some());
-        h.ctx.data_mut(|d| d.insert_temp(egui::Id::new("backstage_template_search"), String::new()));
+        h.ctx.data_mut(|d| d.insert_temp(search, String::new()));
         h.run_steps(3);
 
         h.get_by_label("Team memo").click();
@@ -1240,33 +1256,25 @@ mod tests {
         let _ = std::fs::remove_dir_all(&chosen);
     }
 
-    /// A personal template replaces the document like New does: unsaved changes are asked about
-    /// first, and nothing is replaced until that is answered.
+    /// A personal template opens a new document like New does: nothing is asked, and the
+    /// document with unsaved changes stays open beside it.
     #[test]
-    fn a_personal_template_asks_about_unsaved_changes_first() {
+    fn a_personal_template_opens_beside_unsaved_work() {
         let dir = personal_dir("dirty");
         let memo = dir.join("Memo.dotx");
         write_template(&memo, "From the template");
         let mut h = new_page_harness(Some(dir.clone()));
         h.state_mut().run("document.setText", json!({"text": "Unsaved work"})).unwrap();
-        assert!(h.state().session.dirty);
+        let first = h.state().session.document_id();
         h.get_by_label("Memo").click();
         h.run_steps(3);
         let body = |h: &egui_kittest::Harness<'static, WordApp>| h.state().session.doc.plain_text(wordcraft_doc::StoryRef::Body);
-        assert!(matches!(h.state().dialog, Some(crate::dialogs::Dialog::SaveChanges { .. })), "Save changes is asked");
-        assert_eq!(body(&h), "Unsaved work", "the document stays until the question is answered");
-        h.state_mut().run("ui.saveChanges", json!({"answer": "cancel"})).unwrap();
-        h.run_steps(2);
-        assert_eq!(body(&h), "Unsaved work", "Cancel keeps it");
-        assert_eq!(h.state().session.doc.settings.attached_template, None);
-        h.state_mut().run("ui.backstage", json!({"value": true, "page": "new"})).unwrap();
-        h.run_steps(3);
-        h.get_by_label("Memo").click();
-        h.run_steps(3);
-        h.state_mut().run("ui.saveChanges", json!({"answer": "dontSave"})).unwrap();
-        h.run_steps(2);
-        assert!(body(&h).contains("From the template"), "Don't Save makes the document from the template");
+        assert!(h.state().dialog.is_none(), "nothing is asked");
+        assert!(body(&h).contains("From the template"));
         assert_eq!(h.state().session.doc.settings.attached_template.as_deref(), Some(memo.to_string_lossy().as_ref()));
+        h.state_mut().run("view.switchWindows", json!({"id": first})).unwrap();
+        assert_eq!(body(&h), "Unsaved work", "the unsaved document is still open");
+        assert!(h.state().session.dirty);
         drop(h);
         let _ = std::fs::remove_dir_all(&dir);
     }
