@@ -2597,3 +2597,18 @@ fn a_line_finds_its_clipped_cell_by_path() {
     assert_eq!(hits, n);
     assert!(start.elapsed() < std::time::Duration::from_secs(10), "{:?}", start.elapsed());
 }
+
+/// N-up fits the whole markup page once, with the same centering as the physical-sheet preview.
+#[test]
+fn imposed_markup_pages_fit_the_slot_without_double_scaling() {
+    let page = wordcraft_layout::Page { w: 732.0, h: 792.0, markup: 120.0, ..Default::default() };
+    for (width, height, scale) in [(1000.0, 396.0, 0.5), (183.0, 1000.0, 0.25)] {
+        let slot = imposition::Slot { page: 0, x: 17.0, y: 23.0, width, height };
+        let fit = Fit::in_slot(&page, slot);
+        assert!((fit.k - scale).abs() < 0.00001);
+        assert!((fit.dx - (17.0 + (width - 732.0 * scale) / 2.0)).abs() < 0.00001);
+        assert!((fit.dy - (23.0 + (height - 792.0 * scale) / 2.0)).abs() < 0.00001);
+        assert_eq!(fit.page_w, 612.0, "the unscaled document width excludes the balloon area");
+        assert_eq!((fit.paper_w, fit.paper_h), (width, height));
+    }
+}

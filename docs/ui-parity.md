@@ -323,3 +323,5 @@ labels unambiguous. Those extra-number assignments have not been compared with W
 Print sheet imposition (#641) is integrated with current main, retaining numeral rendering and safe PDF link filtering alongside N-up and booklet printing.
 
 Integrate N-up and booklet printing (#641) with main 438775ce, egui 0.37 and accessible print controls.
+
+Print range changes start at the first planned physical sheet. Native submission and N-up PDF placement use the same Print Markup pagination and logical-page geometry as the preview.

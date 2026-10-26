@@ -23,7 +23,7 @@ pub struct PrintSettings {
     pub parity: String,
     pub copies: u32,
     pub collate: bool,
-    /// The page shown in the preview (0-based).
+    /// The physical sheet side shown in the planned print job (0-based).
     pub preview: usize,
     /// `auto`, `portrait` or `landscape`.
     pub orientation: String,
@@ -219,7 +219,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 let pages_label = ui.label(egui::RichText::new(tl!("Pages")).font(medium(13.0)));
                 if choice(ui, "print_range", &mut app.ui.print.range, &RANGES, &pages_label) {
                     // Show the first page that will print.
-                    app.ui.print.preview = if app.ui.print.range == "all" { 0 } else { current.0.min(total.saturating_sub(1)) };
+                    app.ui.print.preview = 0;
                 }
                 if app.ui.print.range == "custom" {
                     ui.add(

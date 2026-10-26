@@ -371,3 +371,85 @@ fn print_booklet_choice_updates_sheet_preview() {
     assert_eq!(h.state().ui.print.params()["pagesPerSheet"], 4);
     assert!(h.query(By::new().role(egui::accesskit::Role::Image).label("Page 2 of 2")).is_some());
 }
+
+/// Changing a late-page range opens its first physical sheet in single-page and N-up previews.
+#[test]
+fn print_range_changes_start_at_the_first_planned_sheet() {
+    use egui_kittest::kittest::{By, Queryable};
+    for (range, label, selection, per_sheet, sheets) in
+        [("selection", "Selected pages", "3\u{c}4\u{c}5", "1", 3), ("custom", "Custom range", "9", "2", 5), ("custom", "Custom range", "9", "4", 3)]
+    {
+        let mut app = WordApp::new(
+            Session::new(wordcraft_doc::Document::from_text("1\u{c}2\u{c}3\u{c}4\u{c}5\u{c}6\u{c}7\u{c}8\u{c}9\u{c}10")),
+            Services::default(),
+        );
+        app.ui.language = "en".into();
+        app.run("select.text", json!({"text": selection})).unwrap();
+        assert!(app.session.current_pages(&app.session.export_layout()).0 >= 2);
+        app.run("file.print", json!({})).unwrap();
+        app.ui.print.pages = "2-10".into();
+        app.ui.print.pages_per_sheet = per_sheet.into();
+        app.ui.print.preview = 8;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            },
+            app,
+        );
+        for _ in 0..4 {
+            let mut raw = std::mem::take(h.input_mut());
+            let ctx = h.ctx.clone();
+            h.state_mut().raw_input_hook(&ctx, &mut raw);
+            *h.input_mut() = raw;
+            h.step();
+        }
+        h.get(By::new().role(egui::accesskit::Role::ComboBox).value("All pages")).click();
+        h.run_steps(2);
+        h.get_by_label(label).click();
+        h.run_steps(4);
+        assert_eq!(h.state().ui.print.range, range);
+        assert_eq!(h.state().ui.print.preview, 0, "{range}, {per_sheet} pages per sheet");
+        let preview_label = format!("Page 1 of {sheets}");
+        assert!(h.query(By::new().role(egui::accesskit::Role::Image).label(&preview_label)).is_some());
+    }
+}
+
+/// Native N-up accepts comment balloons and custom ranges from preferences or an explicit markup override.
+#[test]
+fn native_imposed_print_accepts_comment_markup_and_explicit_overrides() {
+    use wordcraft_doc::{Comment, Document, InlineObject, Paragraph, PartKind, Pos, para_block};
+    let mut doc = Document::from_text("First page\u{c}Second page\u{c}Third page");
+    let part = doc.add_part(PartKind::Comment, vec![para_block(Paragraph::with_text("Check these totals", Default::default()))]);
+    doc.comments.insert(0, Comment { author: "Synthetic reviewer".into(), part, ..Default::default() });
+    doc.insert_object(&Pos::body(0, 0), InlineObject::CommentStart { id: 0 }, &Default::default()).unwrap();
+    for explicit_override in [false, true] {
+        let mut app = WordApp::new(Session::new(doc.clone()), Services::default());
+        app.session.prefs.print_markup = !explicit_override;
+        app.session.prefs.markup.comments = true;
+        let marked = app.session.export_layout_with(true);
+        let plain = app.session.export_layout_with(false);
+        assert!(marked.pages[0].w > plain.pages[0].w && marked.pages[0].markup > 0.0, "the fixture includes actual balloon geometry");
+        let pages = marked.pages.len();
+        assert!(pages >= 3);
+        let jobs = Rc::new(RefCell::new(Vec::new()));
+        let observed = jobs.clone();
+        app.services.print_native = Some(Box::new(move |bytes, _, _, options| {
+            observed.borrow_mut().push((bytes, options));
+            let (tx, rx) = std::sync::mpsc::channel();
+            tx.send(Ok("test spooler".into())).unwrap();
+            rx
+        }));
+        app.printing.printers.push(Printer { name: "Queue".into(), label: String::new(), default: true });
+        app.run("ui.printSettings", json!({"printer":"Queue"})).unwrap();
+        let mut params = json!({"range":"custom","pages":format!("1-{pages}"),"pagesPerSheet":2});
+        if explicit_override {
+            params["markup"] = json!(true);
+        }
+        app.run("ui.printSubmit", params).unwrap();
+        let jobs = jobs.borrow();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(String::from_utf8_lossy(&jobs[0].0).matches("/MediaBox[").count(), pages.div_ceil(2));
+        assert!(jobs[0].1.contains(&("orientation-requested".into(), "4".into())));
+    }
+}

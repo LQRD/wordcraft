@@ -192,7 +192,8 @@ pub fn submit(app: &mut crate::WordApp, params: &serde_json::Value) -> Result<se
             let orientation = params.get("orientation").and_then(|v| v.as_str()).unwrap_or(&app.ui.print.orientation);
             let mode = wordcraft_engine::print::imposition(params).map_err(|e| e.to_string())?;
             let is_landscape = if mode != wordcraft_engine::print::Imposition::Single {
-                let lay = app.session.export_layout();
+                let markup = wordcraft_engine::cmd::file::export_options(&app.session, &pdf_params).markup;
+                let lay = app.session.export_layout_with(markup);
                 wordcraft_engine::print::sheets(params, &lay, app.session.current_pages(&lay))
                     .map_err(|e| e.to_string())?
                     .first()

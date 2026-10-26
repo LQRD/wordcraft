@@ -299,14 +299,14 @@ impl Fit {
     /// Fit the complete logical page (including markup) within one fixed sheet cell.
     fn in_slot(page: &Page, slot: imposition::Slot) -> Self {
         let own = Self::of(page, None);
-        let k = (slot.width / own.paper_w).min(slot.height / own.paper_h);
+        let k = (slot.width / page.w).min(slot.height / page.h);
         Self {
             paper_w: slot.width,
             paper_h: slot.height,
             page_w: own.page_w,
-            k: own.k * k,
-            dx: slot.x + (slot.width - own.paper_w * k) / 2.0,
-            dy: slot.y + (slot.height - own.paper_h * k) / 2.0 + own.dy * k,
+            k,
+            dx: slot.x + (slot.width - page.w * k) / 2.0,
+            dy: slot.y + (slot.height - page.h * k) / 2.0,
         }
     }
 
