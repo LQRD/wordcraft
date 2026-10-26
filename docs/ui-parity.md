@@ -326,3 +326,5 @@ Default document zoom (#2080) is integrated with current main, retaining saved p
 Integrate default document zoom (#2080) with main 438775ce and egui 0.37.
 
 Default opening zoom integrates with the multi-document session: creating or opening another document keeps existing unsaved work and each parked view; changing the preference does not reset either open view.
+
+Closing the last document applies the configured default zoom to its new blank replacement. Without a configured default, the previous zoom and fit remain unchanged.

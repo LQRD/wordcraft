@@ -10849,6 +10849,30 @@ fn default_document_zoom_keeps_independent_open_document_views() {
     assert_eq!(session.view.zoom, 1.6, "activating an open document keeps its own zoom");
 }
 
+/// #2080: replacing the last closed document uses configured defaults without changing legacy views.
+#[test]
+fn default_document_zoom_applies_when_closing_the_last_document() {
+    for (preference, zoom, fit) in [(json!(125), 1.25, ""), (json!("pageWidth"), 1.0, "pageWidth")] {
+        let mut session = s();
+        run(&mut session, "file.options", json!({"defaultZoom": preference}));
+        run(&mut session, "view.zoom", json!({"value": 175}));
+        let closed = session.document_id();
+        session.close_document(closed).unwrap();
+        assert_ne!(session.document_id(), closed);
+        assert_eq!(session.documents().len(), 1);
+        assert_eq!(session.view.zoom, zoom);
+        assert_eq!(session.view.fit, fit);
+        assert!(!session.dirty && session.doc.settings.zoom.is_none());
+    }
+    let mut legacy = s();
+    legacy.view.zoom = 0.8;
+    legacy.view.fit = "onePage".into();
+    let closed = legacy.document_id();
+    legacy.close_document(closed).unwrap();
+    assert_eq!(legacy.view.zoom, 0.8, "no configured default keeps the previous zoom");
+    assert_eq!(legacy.view.fit, "onePage");
+}
+
 /// #2080: invalid options are atomic and legacy saved preferences keep their other values.
 #[test]
 fn default_document_zoom_validates_options_and_saved_preferences() {

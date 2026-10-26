@@ -541,6 +541,9 @@ impl Session {
                 let mut fresh = DocState::new(doc, self.untitled_count, view);
                 self.order = vec![fresh.document_id];
                 self.swap_doc(&mut fresh);
+                if self.prefs.default_zoom.is_some() {
+                    self.apply_document_zoom();
+                }
                 self.forget_recovery_copy(&fresh);
             }
         }
