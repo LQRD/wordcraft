@@ -360,16 +360,16 @@ fn print_booklet_choice_updates_sheet_preview() {
     h.get_by_label("Booklet (left binding)").click();
     h.run_steps(4);
     assert_eq!(h.state().ui.print.params()["pagesPerSheet"], "booklet");
-    assert!(h.query(By::new().role(egui::accesskit::Role::Image).label("Page 1 of 4")).is_some());
-    h.get_by_label("Next Page").click();
+    assert!(h.query(By::new().role(egui::accesskit::Role::Image).label("Sheet 1 of 4")).is_some());
+    h.get_by_label("Next sheet").click();
     h.run_steps(3);
-    assert!(h.query(By::new().role(egui::accesskit::Role::Image).label("Page 2 of 4")).is_some());
+    assert!(h.query(By::new().role(egui::accesskit::Role::Image).label("Sheet 2 of 4")).is_some());
     h.get(By::new().role(egui::accesskit::Role::ComboBox).value("Booklet (left binding)")).click();
     h.run_steps(2);
     h.get_by_label("4").click();
     h.run_steps(4);
     assert_eq!(h.state().ui.print.params()["pagesPerSheet"], 4);
-    assert!(h.query(By::new().role(egui::accesskit::Role::Image).label("Page 2 of 2")).is_some());
+    assert!(h.query(By::new().role(egui::accesskit::Role::Image).label("Sheet 2 of 2")).is_some());
 }
 
 /// Changing a late-page range opens its first physical sheet in single-page and N-up previews.
@@ -411,7 +411,7 @@ fn print_range_changes_start_at_the_first_planned_sheet() {
         h.run_steps(4);
         assert_eq!(h.state().ui.print.range, range);
         assert_eq!(h.state().ui.print.preview, 0, "{range}, {per_sheet} pages per sheet");
-        let preview_label = format!("Page 1 of {sheets}");
+        let preview_label = format!("Sheet 1 of {sheets}");
         assert!(h.query(By::new().role(egui::accesskit::Role::Image).label(&preview_label)).is_some());
         if range == "custom" {
             h.state_mut().ui.print.preview = (sheets - 1) as usize;

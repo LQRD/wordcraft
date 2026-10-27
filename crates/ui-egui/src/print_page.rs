@@ -328,8 +328,8 @@ fn preview(app: &mut WordApp, ui: &mut Ui, lay: &DocLayout) {
     let fit = ((pane.x - 2.0 * PREVIEW_MARGIN) / pw).min((pane.y - 2.0 * PREVIEW_MARGIN) / ph).max(0.01);
     let scale = app.ui.print.zoom.map_or(fit, |z| z * crate::canvas::PX_PER_PT);
     let size = vec2(pw * scale, ph * scale);
-    // Count physical PDF pages/sides; a duplex sheet can contain two such pages.
-    let label = crate::i18n::fmt(tl!("Page {page} of {pages}"), &[("page", &(page + 1).to_string()), ("pages", &total.to_string())]);
+    // Navigate the imposed sheet views rather than the logical document pages.
+    let label = crate::i18n::fmt(tl!("Sheet {page} of {pages}"), &[("page", &(page + 1).to_string()), ("pages", &total.to_string())]);
     egui::ScrollArea::both().id_salt("print_preview").auto_shrink(false).max_width(pane.x).max_height(pane.y).show(ui, |ui| {
         let room = vec2((size.x + 2.0 * PREVIEW_MARGIN).max(ui.available_width()), (size.y + 2.0 * PREVIEW_MARGIN).max(ui.available_height()));
         let (area, _) = ui.allocate_exact_size(room, Sense::hover());
@@ -360,11 +360,11 @@ fn preview(app: &mut WordApp, ui: &mut Ui, lay: &DocLayout) {
             icons::paint(ui.painter(), r.shrink(4.0), icon, col, col);
             enabled && resp.on_hover_text(tip).clicked()
         };
-        if nav(ui, "chevronLeft", tl!("Previous Page"), page > 0) {
+        if nav(ui, "chevronLeft", tl!("Previous sheet"), page > 0) {
             app.ui.print.preview = page - 1;
         }
         ui.label(egui::RichText::new(&label).font(regular(13.0)));
-        if nav(ui, "chevronRight", tl!("Next Page"), page + 1 < total) {
+        if nav(ui, "chevronRight", tl!("Next sheet"), page + 1 < total) {
             app.ui.print.preview = page + 1;
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

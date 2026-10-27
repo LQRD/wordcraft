@@ -60,12 +60,8 @@ impl Imposition {
                 .iter()
                 .map(|&page| {
                     let pg = lay.pages.get(page).ok_or(PdfError::BadPage(page.saturating_add(1)))?;
-                    let fit = super::Fit::of(pg, paper);
-                    Ok(Sheet {
-                        width: fit.paper_w,
-                        height: fit.paper_h,
-                        slots: vec![Slot { page, x: 0.0, y: 0.0, width: fit.paper_w, height: fit.paper_h }],
-                    })
+                    let (width, height) = super::export::Fit::of(pg, paper).paper_size();
+                    Ok(Sheet { width, height, slots: vec![Slot { page, x: 0.0, y: 0.0, width, height }] })
                 })
                 .collect();
         }
