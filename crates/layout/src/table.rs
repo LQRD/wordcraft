@@ -1129,7 +1129,9 @@ fn region_text(st: &TableStyleProps, region: Region) -> CellText {
 /// with their own. `None` when every cell is empty.
 fn column_content(ctx: &mut Ctx, t: &Table, style: Option<&TableStyleProps>, depth: usize) -> Option<Vec<(f32, f32)>> {
     let margins_def = default_margins(t, style);
-    let mut cols = vec![(0.0f32, 0.0f32); grid_cols(t).max(1)];
+    // The grid's width once: counting it walks every row.
+    let ncols = grid_cols(t);
+    let mut cols = vec![(0.0f32, 0.0f32); ncols.max(1)];
     let mut spanning = Vec::new();
     let mut any = false;
     for (ri, row) in t.rows.iter().enumerate() {
@@ -1151,8 +1153,6 @@ fn column_content(ctx: &mut Ctx, t: &Table, style: Option<&TableStyleProps>, dep
         }
         spanning.extend(row_gaps(row, g).map(|(g, span, w)| (g, span, (w, w))));
     }
-    // The grid's width once: counting it walks every row, and there can be a spanning cell in each.
-    let ncols = grid_cols(t);
     for (g, span, need) in spanning {
         let Some(cs) = cols.get_mut(g..g.saturating_add(span).min(ncols)) else { continue };
         let n = cs.len().max(1) as f32;

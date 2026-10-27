@@ -221,16 +221,22 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     // Show the first page that will print.
                     app.ui.print.preview = 0;
                 }
-                if app.ui.print.range == "custom" {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut app.ui.print.pages)
-                            .hint_text(tl!("Pages like 1-3, 5"))
-                            .desired_width(260.0)
-                            .char_limit(wordcraft_engine::print::MAX_SPEC_CHARS),
-                    )
-                    .labelled_by(pages_label.id);
+                if app.ui.print.range == "custom"
+                    && ui
+                        .add(
+                            egui::TextEdit::singleline(&mut app.ui.print.pages)
+                                .hint_text(tl!("Pages like 1-3, 5"))
+                                .desired_width(260.0)
+                                .char_limit(wordcraft_engine::print::MAX_SPEC_CHARS),
+                        )
+                        .labelled_by(pages_label.id)
+                        .changed()
+                {
+                    app.ui.print.preview = 0;
                 }
-                choice_named(ui, "print_parity", &mut app.ui.print.parity, &PARITIES, tl!("Pages in the range"));
+                if choice_named(ui, "print_parity", &mut app.ui.print.parity, &PARITIES, tl!("Pages in the range")) {
+                    app.ui.print.preview = 0;
+                }
                 let orientation_label = ui.label(egui::RichText::new(tl!("Orientation")).font(medium(13.0)));
                 if app.ui.print.pages_per_sheet == "2" || app.ui.print.pages_per_sheet.starts_with("booklet") {
                     ui.label(tl!("Landscape"));
@@ -322,6 +328,7 @@ fn preview(app: &mut WordApp, ui: &mut Ui, lay: &DocLayout) {
     let fit = ((pane.x - 2.0 * PREVIEW_MARGIN) / pw).min((pane.y - 2.0 * PREVIEW_MARGIN) / ph).max(0.01);
     let scale = app.ui.print.zoom.map_or(fit, |z| z * crate::canvas::PX_PER_PT);
     let size = vec2(pw * scale, ph * scale);
+    // Count physical PDF pages/sides; a duplex sheet can contain two such pages.
     let label = crate::i18n::fmt(tl!("Page {page} of {pages}"), &[("page", &(page + 1).to_string()), ("pages", &total.to_string())]);
     egui::ScrollArea::both().id_salt("print_preview").auto_shrink(false).max_width(pane.x).max_height(pane.y).show(ui, |ui| {
         let room = vec2((size.x + 2.0 * PREVIEW_MARGIN).max(ui.available_width()), (size.y + 2.0 * PREVIEW_MARGIN).max(ui.available_height()));

@@ -1,7 +1,7 @@
 //! A no-break space is laid out as wide as an ordinary space, whatever the font's own U+00A0
 //! glyph measures (Lucida Bright draws it twice as wide).
 
-use super::*;
+use super::{Document, LayoutCache, LayoutOptions, Placed, layout};
 
 /// Inter with its U+00A0 glyph twice as wide as its space, under the family name "Wnbsp".
 /// Built from the bundled font so the test needs no installed font.

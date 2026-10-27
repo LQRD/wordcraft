@@ -325,3 +325,5 @@ Print sheet imposition (#641) is integrated with current main, retaining numeral
 Integrate N-up and booklet printing (#641) with main 438775ce, egui 0.37 and accessible print controls.
 
 Print range changes start at the first planned physical sheet. Native submission and N-up PDF placement use the same Print Markup pagination and logical-page geometry as the preview.
+
+Changes to the selected range, its typed page list or its odd/even filter restart the physical PDF-page preview. Layout and zoom changes retain the existing clamping behavior; the counter includes both sides of duplex sheets.

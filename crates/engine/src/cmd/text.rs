@@ -967,6 +967,24 @@ fn backspace(s: &mut Session, v: &Value) -> CmdResult {
 /// numbering while keeping the text position, takes a List Paragraph out of the list, outdents,
 /// joins the previous paragraph or moves into a preceding table; the command wrapper restores a
 /// content-control placeholder.
+/// The first Backspace at a numbered paragraph's start removes the number but keeps the item's
+/// indent (Word): the text stays where it was, so the indent becomes the paragraph's own.
+fn remove_number(s: &mut Session, f: &Pos, n: NumRef) -> CmdResult {
+    let text_at = s.doc.numbering.level(n.num, n.level).map(|l| l.indent);
+    let p = s.doc.para_mut(f.story, &f.path)?;
+    if p.props.style.as_deref() == Some("ListParagraph") {
+        if p.props.indent_left.is_none() && p.props.indent_left_chars.is_none_or(|c| c == 0.0) {
+            p.props.indent_left = text_at;
+        }
+        if p.props.indent_first.is_none() && p.props.indent_first_chars.is_none_or(|c| c == 0.0) {
+            p.props.indent_first = Some(0.0);
+        }
+    }
+    p.props.numbering = Some(NumRef { num: 0, level: 0 });
+    p.touch();
+    sel_result(s)
+}
+
 fn backspace_inner(s: &mut Session, _: &Value) -> CmdResult {
     s.goal_x = None;
     s.pending = None;
@@ -1000,22 +1018,8 @@ fn backspace_inner(s: &mut Session, _: &Value) -> CmdResult {
         return sel_result(s);
     }
     // At the start of a paragraph.
-    if para.props.numbering.is_some_and(|n| n.num != 0) {
-        // First Backspace removes the number but keeps the item's indent (Word): the text stays
-        // where it was, so the indent becomes the paragraph's own (`num: 0` alone drops it).
-        let text_at = para.props.numbering.and_then(|n| s.doc.numbering.level(n.num, n.level)).map(|l| l.indent);
-        let p = s.doc.para_mut(f.story, &f.path)?;
-        if p.props.style.as_deref() == Some("ListParagraph") {
-            if p.props.indent_left.is_none() && p.props.indent_left_chars.is_none_or(|c| c == 0.0) {
-                p.props.indent_left = text_at;
-            }
-            if p.props.indent_first.is_none() && p.props.indent_first_chars.is_none_or(|c| c == 0.0) {
-                p.props.indent_first = Some(0.0);
-            }
-        }
-        p.props.numbering = Some(NumRef { num: 0, level: 0 });
-        p.touch();
-        return sel_result(s);
+    if let Some(n) = para.props.numbering.filter(|n| n.num != 0) {
+        return remove_number(s, &f, n);
     }
     if para.props.style.as_deref() == Some("ListParagraph") {
         // The second one takes it out of the list's indent instead of joining paragraphs.

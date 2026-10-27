@@ -375,6 +375,7 @@ fn print_booklet_choice_updates_sheet_preview() {
 /// Changing a late-page range opens its first physical sheet in single-page and N-up previews.
 #[test]
 fn print_range_changes_start_at_the_first_planned_sheet() {
+    use egui::{Event, Key, Modifiers};
     use egui_kittest::kittest::{By, Queryable};
     for (range, label, selection, per_sheet, sheets) in
         [("selection", "Selected pages", "3\u{c}4\u{c}5", "1", 3), ("custom", "Custom range", "9", "2", 5), ("custom", "Custom range", "9", "4", 3)]
@@ -412,6 +413,31 @@ fn print_range_changes_start_at_the_first_planned_sheet() {
         assert_eq!(h.state().ui.print.preview, 0, "{range}, {per_sheet} pages per sheet");
         let preview_label = format!("Page 1 of {sheets}");
         assert!(h.query(By::new().role(egui::accesskit::Role::Image).label(&preview_label)).is_some());
+        if range == "custom" {
+            h.state_mut().ui.print.preview = (sheets - 1) as usize;
+            h.run_steps(2);
+            h.get(By::new().role(egui::accesskit::Role::TextInput).label("Pages")).click();
+            h.run_steps(2);
+            h.input_mut().events.push(Event::Key { key: Key::A, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND });
+            h.step();
+            h.input_mut().events.extend([
+                Event::Key { key: Key::A, physical_key: None, pressed: false, repeat: false, modifiers: Modifiers::NONE },
+                Event::Text("2-9".into()),
+            ]);
+            h.run_steps(4);
+            assert_eq!(h.state().ui.print.pages, "2-9", "the real text input changed the range");
+            assert_eq!(h.state().ui.print.preview, 0, "editing the custom range starts at its first sheet");
+            if per_sheet == "2" {
+                h.state_mut().ui.print.preview = 3;
+                h.run_steps(2);
+                h.get(By::new().role(egui::accesskit::Role::ComboBox).value("All pages in the range")).click();
+                h.run_steps(2);
+                h.get_by_label("Odd pages only").click();
+                h.run_steps(4);
+                assert_eq!(h.state().ui.print.parity, "odd");
+                assert_eq!(h.state().ui.print.preview, 0, "filtering the selected pages starts at its first sheet");
+            }
+        }
     }
 }
 
