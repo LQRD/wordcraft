@@ -192,14 +192,15 @@ fn extent(items: &[Placed]) -> f32 {
 }
 
 /// Box `id`'s share of its chain's text (items in its unturned frame), if it is linked.
-/// An inner `None` preserves refusal by the chain's expansion budget.
+/// An inner `None` preserves this occurrence's budget refusal without caching it: a later
+/// occurrence may have room to expand. Successful flows are shared across occurrences.
 fn chain_share(ctx: &mut Ctx, id: u32, depth: usize) -> Option<Option<Vec<Placed>>> {
     ctx.chains.build(ctx.doc);
     let (ci, k) = *ctx.chains.member.get(&id)?;
     if !ctx.chains.flows.contains_key(&ci) {
         let chain = ctx.chains.chains.get(ci).cloned().unwrap_or_default();
-        let flow = flow(ctx, &chain, depth);
-        ctx.chains.flows.insert(ci, flow);
+        let Some(flow) = flow(ctx, &chain, depth) else { return Some(None) };
+        ctx.chains.flows.insert(ci, Some(flow));
     }
     Some(ctx.chains.flows.get(&ci).and_then(Option::as_ref).map(|f| f.get(k).cloned().unwrap_or_default()))
 }

@@ -4535,6 +4535,59 @@ fn group_empty_linked_member_keeps_its_editable_frame() {
     assert!(layout.object_at(0, x, y, 4.0).is_none());
 }
 
+/// #1932: a chain refused inside deeply nested boxes can still be edited at the top level.
+#[test]
+fn group_linked_member_recovers_after_a_nested_budget_refusal() {
+    use wordcraft_doc::para::{GroupChild, ShapeKind};
+    let mut d = Document::from_text("\n");
+    let head =
+        d.add_part(wordcraft_doc::PartKind::TextBox, vec![wordcraft_doc::para_block(Paragraph::with_text("Visible chain", Default::default()))]);
+    let tail = d.add_part(wordcraft_doc::PartKind::TextBox, vec![wordcraft_doc::para_block(Default::default())]);
+    d.parts.get_mut(&head).unwrap().body.next = Some(tail);
+    let group = InlineObject::Group {
+        w: 200.0,
+        h: 100.0,
+        ch_w: 200.0,
+        ch_h: 100.0,
+        float: Default::default(),
+        canvas: None,
+        children: vec![GroupChild {
+            x: 0.0,
+            y: 0.0,
+            obj: InlineObject::Shape {
+                kind: ShapeKind::TextBox,
+                w: 180.0,
+                h: 80.0,
+                fill: None,
+                stroke: None,
+                stroke_width: 0.0,
+                story: Some(head),
+                float: Default::default(),
+                freeform: None,
+                effects: Default::default(),
+                extra: Default::default(),
+            },
+        }],
+    };
+    let mut pos = Pos::body(0, 0);
+    for _ in 0..wordcraft_doc::MAX_TEXT_BOX_DEPTH {
+        let id = text_box_at(&mut d, &pos, "", 260.0, 160.0, Default::default());
+        pos = Pos { story: StoryRef::Part(id), path: Path::top(0), off: 0 };
+    }
+    d.insert_object(&pos, group.clone(), &Default::default()).unwrap();
+    d.insert_object(&Pos::body(1, 0), group, &Default::default()).unwrap();
+    let layout = lay(&d);
+    let member = layout.find_object(0, |o| o.group_text_box && o.text_box == Some(head)).expect("valid top-level chain keeps an editable frame");
+    let caret = layout.caret(&Pos { story: StoryRef::Part(head), path: Path::top(0), off: 0 }).expect("valid top-level chain shows its text");
+    assert_eq!(layout.story_at(0, caret.x + 2.0, caret.top + caret.height / 2.0), Some(StoryRef::Part(head)));
+    assert_eq!(layout.story_at(0, member.rect.x + 30.0, member.rect.bottom() - 15.0), Some(StoryRef::Part(head)));
+    assert_eq!(
+        layout.pages[0].items.iter().filter(|it| matches!(it, Placed::Object { group_text_box: true, .. })).count(),
+        1,
+        "refused nested member still has no frame"
+    );
+}
+
 /// #1932: rejecting recursive text-box expansion must not produce an editable nested frame.
 #[test]
 fn group_recursive_member_does_not_bypass_the_box_budget() {
