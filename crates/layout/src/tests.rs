@@ -4420,7 +4420,7 @@ fn group_text_boxes_have_editable_frames_without_replacing_the_group() {
     use wordcraft_doc::para::{Anchor, Float, GroupChild, ShapeKind};
     for header in [false, true] {
         for wrap in [Wrap::InFrontOfText, Wrap::BehindText] {
-            for rot in [0.0, 25.0] {
+            for rot in [0.0, 25.0, 90.0] {
                 let mut d = Document::new();
                 let host = if header {
                     let id = d.add_part(wordcraft_doc::PartKind::Header, vec![wordcraft_doc::para_block(Default::default())]);
@@ -4464,6 +4464,17 @@ fn group_text_boxes_have_editable_frames_without_replacing_the_group() {
                 let member = l.text_box(id, 0).expect("group member has an editable frame");
                 assert!(member.group_text_box);
                 assert_eq!(member.story, host);
+                // Group rotation carries the box's centre; its text is currently drawn upright.
+                // Hit the actual displayed caret, including at 90 degrees: rotating only the
+                // virtual hit frame would make visible text near a corner inaccessible.
+                let caret = l.caret(&d.start_of(StoryRef::Part(id))).expect("member text is drawn");
+                let (cx, cy) = (caret.x + 2.0, caret.top + caret.height / 2.0);
+                assert!(l.object_at_in(0, cx, cy, 4.0, host).is_none(), "displayed text remains editable");
+                if header {
+                    assert_eq!(l.header_footer_text_box_at(0, cx, cy), Some(id));
+                } else {
+                    assert_eq!(l.story_at(0, cx, cy), Some(StoryRef::Part(id)));
+                }
                 let (x, y) = (member.rect.x + 30.0, member.rect.bottom() - 15.0);
                 assert!(l.object_at_in(0, x, y, 4.0, host).is_none(), "group must not grab its text");
                 if header {
@@ -4479,6 +4490,87 @@ fn group_text_boxes_have_editable_frames_without_replacing_the_group() {
             }
         }
     }
+}
+
+/// #1932: an empty trailing linked member still accepts clicks into its shared story.
+#[test]
+fn group_empty_linked_member_keeps_its_editable_frame() {
+    use wordcraft_doc::para::{GroupChild, ShapeKind};
+    let mut d = Document::new();
+    let head = d.add_part(wordcraft_doc::PartKind::TextBox, vec![wordcraft_doc::para_block(Paragraph::with_text("Short", Default::default()))]);
+    let tail = d.add_part(wordcraft_doc::PartKind::TextBox, vec![wordcraft_doc::para_block(Default::default())]);
+    d.parts.get_mut(&head).unwrap().body.next = Some(tail);
+    let children = [head, tail]
+        .into_iter()
+        .enumerate()
+        .map(|(i, id)| GroupChild {
+            x: i as f32 * 180.0,
+            y: 0.0,
+            obj: InlineObject::Shape {
+                kind: ShapeKind::TextBox,
+                w: 140.0,
+                h: 100.0,
+                fill: None,
+                stroke: None,
+                stroke_width: 0.0,
+                story: Some(id),
+                float: Default::default(),
+                freeform: None,
+                effects: Default::default(),
+                extra: Default::default(),
+            },
+        })
+        .collect();
+    let group = InlineObject::Group { w: 320.0, h: 100.0, ch_w: 320.0, ch_h: 100.0, float: page_float(100.0, 220.0), children, canvas: None };
+    d.insert_object(&Pos::body(0, 0), group, &Default::default()).unwrap();
+    let layout = lay(&d);
+    let member = layout.find_object(0, |o| o.group_text_box && o.rect.x > 250.0).expect("empty linked member has a frame");
+    assert_eq!(member.text_box, Some(head));
+    assert!(
+        !layout.pages[0].items.iter().any(|it| matches!(it, Placed::Lines { story: StoryRef::Part(id), x, .. } if *id == head && *x > 250.0)),
+        "the trailing box really is empty"
+    );
+    let (x, y) = (member.rect.x + 30.0, member.rect.y + 30.0);
+    assert_eq!(layout.story_at(0, x, y), Some(StoryRef::Part(head)));
+    assert!(layout.object_at(0, x, y, 4.0).is_none());
+}
+
+/// #1932: rejecting recursive text-box expansion must not produce an editable nested frame.
+#[test]
+fn group_recursive_member_does_not_bypass_the_box_budget() {
+    use wordcraft_doc::para::{GroupChild, ShapeKind};
+    let mut d = Document::new();
+    let id = d.add_part(wordcraft_doc::PartKind::TextBox, vec![wordcraft_doc::para_block(Default::default())]);
+    let group = InlineObject::Group {
+        w: 200.0,
+        h: 100.0,
+        ch_w: 200.0,
+        ch_h: 100.0,
+        float: Default::default(),
+        canvas: None,
+        children: vec![GroupChild {
+            x: 0.0,
+            y: 0.0,
+            obj: InlineObject::Shape {
+                kind: ShapeKind::TextBox,
+                w: 180.0,
+                h: 80.0,
+                fill: None,
+                stroke: None,
+                stroke_width: 0.0,
+                story: Some(id),
+                float: Default::default(),
+                freeform: None,
+                effects: Default::default(),
+                extra: Default::default(),
+            },
+        }],
+    };
+    d.insert_object(&Pos { story: StoryRef::Part(id), path: Path::top(0), off: 0 }, group.clone(), &Default::default()).unwrap();
+    d.insert_object(&Pos::body(0, 0), group, &Default::default()).unwrap();
+    let layout = lay(&d);
+    assert_eq!(layout.text_boxes, 1);
+    assert_eq!(layout.pages[0].items.iter().filter(|it| matches!(it, Placed::Object { group_text_box: true, .. })).count(), 1);
 }
 
 #[test]

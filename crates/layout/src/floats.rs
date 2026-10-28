@@ -526,8 +526,8 @@ pub(crate) fn place_objects(ctx: &mut Ctx, req: &ObjectPlacement) -> (Vec<Placed
                 _ => text_box.map(|id| (id, rect)).into_iter().collect(),
             };
             for (id, rect) in boxes {
-                let items = textbox::box_items(ctx, id, rect, depth);
-                if matches!(obj, InlineObject::Group { canvas: None, .. }) && !items.is_empty() {
+                let Some(items) = textbox::box_items(ctx, id, rect, depth) else { continue };
+                if matches!(obj, InlineObject::Group { canvas: None, .. }) {
                     front.push(Placed::Object {
                         rect,
                         spin: Spin::default(),
