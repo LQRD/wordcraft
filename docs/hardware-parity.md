@@ -1,5 +1,6 @@
 # Hardware parity with Microsoft Word
 
+> **PR update:** 2026-10-29 · Integrate print N-up and booklet layouts (#641) with main aadb077e and its split PDF export modules; preserve current export imports and upstream document-ID tests. Readiness estimates unchanged.
 > **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-23 · **Change:** trivial (Pen / stylus row: two-stroke and closed-head arrows; previously trivial: Pen / stylus row: ink, eraser and Ink to Shape incl. arrows landed; previously trivial: a window too big for its screen shrinks to fit when it opens, #1215; previously trivial: 32-bit Windows starts on OpenGL; previously major: first version) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4 and Word for Windows
 
 > **Printing update:** 2026-10-23 · shared print-only N-up and booklet PDF imposition; direct desktop printing still uses craft-print. Driver-specific tray/options and physical-printer qualification remain; readiness estimates unchanged.
@@ -25,6 +26,7 @@ pens, microphones (Dictate) and speakers (Read Aloud), and displays.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-29 | trivial | Integrate print N-up and booklet layouts (#641) with main aadb077e and its split PDF export modules; preserve current export imports and upstream document-ID tests. |
 | 2026-10-23 | trivial | Print-only 2/4/6/9/16-up grids and left/right-bound booklets share their physical-sheet plan with preview and saved print PDFs. Native copies remain spooler settings; driver depth and physical-device qualification remain. Estimates unchanged. |
 | 2026-10-15 | trivial | Pen / stylus row: Ink to Shape also makes two-stroke arrows and arrows with a closed triangle head |
 | 2026-10-17 | minor | File › Print's Scale to paper size (#2108): pick Letter, Legal, A4 or any Layout › Size paper and every page is scaled to it and centred, the paper turned to each page's orientation, in the preview, the print job (with the spooler's media) and Save these pages as PDF; the document keeps its page size. `paper` param on `ui.print`/`file.printPdf` |
