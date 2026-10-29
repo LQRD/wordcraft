@@ -1,7 +1,7 @@
 # Hardware parity with Microsoft Word
 
 > **PR update:** 2026-10-29 · Integrate print N-up and booklet layouts (#641) with main aadb077e and its split PDF export modules; preserve current export imports and upstream document-ID tests. Readiness estimates unchanged.
-> **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-23 · **Change:** trivial (Pen / stylus row: two-stroke and closed-head arrows; previously trivial: Pen / stylus row: ink, eraser and Ink to Shape incl. arrows landed; previously trivial: a window too big for its screen shrinks to fit when it opens, #1215; previously trivial: 32-bit Windows starts on OpenGL; previously major: first version) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4 and Word for Windows
+> **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-29 · **Change:** trivial (Pen / stylus row: two-stroke and closed-head arrows; previously trivial: Pen / stylus row: ink, eraser and Ink to Shape incl. arrows landed; previously trivial: a window too big for its screen shrinks to fit when it opens, #1215; previously trivial: 32-bit Windows starts on OpenGL; previously major: first version) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4 and Word for Windows
 
 > **Printing update:** 2026-10-23 · shared print-only N-up and booklet PDF imposition; direct desktop printing still uses craft-print. Driver-specific tray/options and physical-printer qualification remain; readiness estimates unchanged.
 
