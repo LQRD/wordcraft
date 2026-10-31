@@ -129,7 +129,9 @@ fn write_attempt(doc: &Document, lay: &DocLayout, opts: &PdfOptions, pages: &[us
             if clip.is_some() {
                 surface.pop();
             }
-            annotations.extend(ex.annotations(fit));
+            if opts.links {
+                annotations.extend(ex.annotations(fit));
+            }
         }
         surface.finish();
         for annotation in annotations {

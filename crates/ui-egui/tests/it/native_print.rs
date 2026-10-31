@@ -210,7 +210,7 @@ fn native_ranges_and_parity_do_not_duplicate_spooler_copies() {
     }
     assert!(jobs.borrow().is_empty(), "invalid settings do not send any job");
     let params = json!({"pages":"1-3","parity":"odd","collate":false});
-    let (expected, plan) = app.session.print_pdf(&params).unwrap();
+    let (expected, plan) = app.session.print_job_pdf(&params).unwrap();
     assert_eq!(plan.pages, vec![0, 2]);
     app.run("ui.printSubmit", params).unwrap();
     let jobs = jobs.borrow();
@@ -477,5 +477,31 @@ fn native_imposed_print_accepts_comment_markup_and_explicit_overrides() {
         assert_eq!(jobs.len(), 1);
         assert_eq!(String::from_utf8_lossy(&jobs[0].0).matches("/MediaBox[").count(), pages.div_ceil(2));
         assert!(jobs[0].1.contains(&("orientation-requested".into(), "4".into())));
+    }
+}
+
+/// #4734: the job sent to the printer has no link annotations, which a printer driver can't fit
+/// to the paper ("flatten page annotations before using shrink-to-fit"); `file.printPdf` (Save
+/// these pages as PDF) keeps them.
+#[test]
+fn native_print_job_leaves_out_link_annotations() {
+    for mode in [json!(1), json!(2), json!("booklet"), json!("bookletReverse")] {
+        let mut app = WordApp::new(Session::new(wordcraft_doc::Document::new()), Services::default());
+        app.run("insert.link", json!({"url": "https://example.com", "text": "a link"})).unwrap();
+        app.printing.printers.push(Printer { name: "Queue".into(), label: String::new(), default: true });
+        app.run("ui.printSettings", json!({"printer":"Queue"})).unwrap();
+        let jobs = Rc::new(RefCell::new(Vec::new()));
+        let observed = jobs.clone();
+        app.services.print_native = Some(Box::new(move |bytes, _, _, _| {
+            observed.borrow_mut().push(bytes);
+            let (sender, receiver) = std::sync::mpsc::channel();
+            sender.send(Ok("queued".into())).unwrap();
+            receiver
+        }));
+        let annots = |bytes: &[u8]| String::from_utf8_lossy(bytes).contains("/Annots");
+        app.run("ui.printSubmit", json!({"paper": "A4", "pagesPerSheet": mode})).unwrap();
+        assert!(!annots(&jobs.borrow()[0]), "the printer gets no link annotations");
+        let (saved, _) = app.session.print_pdf(&json!({"paper": "A4", "pagesPerSheet": mode})).unwrap();
+        assert!(annots(&saved), "a saved print PDF keeps its links");
     }
 }
