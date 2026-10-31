@@ -100,7 +100,6 @@ Desktop Home/Open Recent entries show a localized File not found label and dimme
 | 2026-10-29 | trivial | Displayed document titles and suggested file names omit NUL characters (X11 panicked on them) and use the localized untitled name when nothing remains (#3634) |
 | 2026-10-29 | trivial | Recipient labels continue across product-sized sheets instead of stopping after the first sheet (#4880). Filtered/sorted order, product geometry and single-label mode retained; readiness estimates unchanged. |
 | 2026-10-26 | trivial | Layout › Arrange › Group stays on while a group is selected, so Ungroup in its menu can be reached; it was greyed out because one object has nothing to group (#4229) |
-| 2026-10-26 | trivial |  |
 | 2026-10-25 | trivial | #3314: borrow the path passed to file opening. |
 | 2026-10-25 | trivial | Integrate #3314 recent file availability with current main, preserving newer behavior and progress history. |
 | 2026-10-21 | trivial | Recent files: missing paths are dimmed and labelled, checked on a background worker with incremental results and refreshed while Home/Open is visible (#3314); estimates unchanged |

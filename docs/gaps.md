@@ -168,7 +168,6 @@ Recipient label generation (#4880) now includes all selected recipients across a
 | 2026-10-28 | trivial | #4658: bound Markdown reference-label rejection work, preserving literal source and ordinary link matching |
 | 2026-10-29 | trivial | Recipient labels continue across product-sized sheets instead of stopping after the first sheet (#4880). Filtered/sorted order, product geometry and single-label mode retained; readiness estimates unchanged. |
 | 2026-10-29 | trivial | HTML import keeps preformatted lines with CR, CRLF or LF input newlines (#4810); numeric character references retain their separate meaning; readiness estimates unchanged. |
-| 2026-10-26 | trivial |  |
 | 2026-10-25 | trivial | Integrate #3314 recent file availability with current main, preserving newer behavior and progress history. |
 | 2026-10-21 | trivial | Recent files: missing paths are dimmed and labelled, checked on a background worker with incremental results and refreshed while Home/Open is visible (#3314); estimates unchanged |
 | 2026-10-22 | trivial | View windows: several open documents and Switch Windows in the engine |
